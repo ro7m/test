@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -30,10 +31,15 @@
             border: none;
             cursor: pointer;
         }
+        #status {
+            color: red;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
     <h1>OCR Text Extractor</h1>
+    <div id="status"></div>
     <input type="file" id="imageUpload" accept="image/*">
     <img id="imagePreview" alt="Image Preview" style="display: none;">
     <button id="extractButton" style="margin-top: 10px;">Extract Text</button>
@@ -41,23 +47,83 @@
     <canvas id="canvas" style="display: none;"></canvas>
 
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-    <script>
-        // Ensure Module is defined before OpenCV script loads
-        var Module = {
-            preRun: [],
-            postRun: [],
-            print: console.log,
-            printErr: console.error,
-            onRuntimeInitialized: function() {
-                console.log('OpenCV.js runtime initialized');
-            }
-        };
-    </script>
     <script src="https://docs.opencv.org/4.5.2/opencv.js"></script>
 
     <script>
-        let startTime;
-        let timerInterval;
+        // Global status and logging function
+        function updateStatus(message, isError = false) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.style.color = isError ? 'red' : 'green';
+            console.log(isError ? 'ERROR:' : 'STATUS:', message);
+        }
+
+        // Detect library loading
+        let openCVLoaded = false;
+        let onnxLoaded = false;
+
+        // Wait for OpenCV to load
+        function waitForOpenCV() {
+            return new Promise((resolve, reject) => {
+                const maxAttempts = 50;
+                let attempts = 0;
+
+                function checkOpenCV() {
+                    attempts++;
+                    if (typeof cv !== 'undefined' && cv.getBuildInformation) {
+                        openCVLoaded = true;
+                        updateStatus('OpenCV.js loaded successfully');
+                        resolve(cv);
+                    } else if (attempts > maxAttempts) {
+                        updateStatus('Failed to load OpenCV.js', true);
+                        reject(new Error('OpenCV.js failed to load'));
+                    } else {
+                        setTimeout(checkOpenCV, 100);
+                    }
+                }
+
+                checkOpenCV();
+            });
+        }
+
+        // Wait for ONNX Runtime to load
+        function waitForONNX() {
+            return new Promise((resolve, reject) => {
+                const maxAttempts = 50;
+                let attempts = 0;
+
+                function checkONNX() {
+                    attempts++;
+                    if (typeof ort !== 'undefined' && ort.InferenceSession) {
+                        onnxLoaded = true;
+                        updateStatus('ONNX Runtime loaded successfully');
+                        resolve(ort);
+                    } else if (attempts > maxAttempts) {
+                        updateStatus('Failed to load ONNX Runtime', true);
+                        reject(new Error('ONNX Runtime failed to load'));
+                    } else {
+                        setTimeout(checkONNX, 100);
+                    }
+                }
+
+                checkONNX();
+            });
+        }
+
+        // Main initialization
+        async function initializeLibraries() {
+            try {
+                await Promise.all([waitForOpenCV(), waitForONNX()]);
+                updateStatus('All libraries loaded successfully');
+                document.getElementById('extractButton').disabled = false;
+            } catch (error) {
+                updateStatus(`Initialization error: ${error.message}`, true);
+                document.getElementById('extractButton').disabled = true;
+            }
+        }
+
+        // Timer functions
+        let startTime, timerInterval;
 
         function startTimer() {
             startTime = new Date();
@@ -74,168 +140,85 @@
             const seconds = Math.floor(timeDifference / 1000) % 60;
             const minutes = Math.floor(timeDifference / (1000 * 60)) % 60;
             const hours = Math.floor(timeDifference / (1000 * 60 * 60));
-            document.getElementById('timer').innerText = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+            document.getElementById('timer').innerText = 
+                `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
         }
 
         function pad(value) {
             return value < 10 ? `0${value}` : value;
         }
 
-        async function runDetectionModel(imageData) {
-            try {
-                // Note: Replace with actual path to your detection model
-                const session = await ort.InferenceSession.create('models/rep_fast_base.onnx');
-                const image = cv.imdecode(imageData);
-                const inputTensor = preprocessImageForDetection(image);
-                const feeds = { 'input': inputTensor };
-                const results = await session.run(feeds);
-                return postprocessDetectionResults(results);
-            } catch (error) {
-                console.error('Detection model error:', error);
-                return [];
+        // Image processing functions
+        async function processImage(file) {
+            if (!openCVLoaded || !onnxLoaded) {
+                updateStatus('Libraries not loaded', true);
+                return;
             }
-        }
 
-        async function runRecognitionModel(croppedImages) {
             try {
-                // Note: Replace with actual path to your recognition model
-                const session = await ort.InferenceSession.create('models/parseq_dynamic.onnx');
-                const results = [];
-                for (const croppedImage of croppedImages) {
-                    const inputTensor = preprocessImageForRecognition(croppedImage);
-                    const feeds = { 'input': inputTensor };
-                    const result = await session.run(feeds);
-                    results.push(postprocessRecognitionResult(result));
-                }
-                return results;
-            } catch (error) {
-                console.error('Recognition model error:', error);
-                return [];
-            }
-        }
-
-        function preprocessImageForDetection(image) {
-            const resizedImage = new cv.Mat();
-            cv.resize(image, resizedImage, new cv.Size(1024, 1024));
-            
-            const normalizedImage = new cv.Mat();
-            resizedImage.convertTo(normalizedImage, cv.CV_32F, 1/255.0);
-            
-            const channels = new cv.MatVector();
-            cv.split(normalizedImage, channels);
-            
-            const tensor = new ort.Tensor('float32', 
-                new Float32Array(channels.get(0).data), 
-                [1, 3, 1024, 1024]
-            );
-            
-            return tensor;
-        }
-
-        function preprocessImageForRecognition(image) {
-            const resizedImage = new cv.Mat();
-            cv.resize(image, resizedImage, new cv.Size(128, 32));
-            
-            const normalizedImage = new cv.Mat();
-            resizedImage.convertTo(normalizedImage, cv.CV_32F, 1/255.0);
-            
-            const channels = new cv.MatVector();
-            cv.split(normalizedImage, channels);
-            
-            const tensor = new ort.Tensor('float32', 
-                new Float32Array(channels.get(0).data), 
-                [1, 3, 32, 128]
-            );
-            
-            return tensor;
-        }
-
-        function postprocessDetectionResults(results) {
-            // This is a placeholder - you'll need to adjust based on your actual model output
-            const boundingBoxes = results['output'].data.map(box => ({
-                x: Math.max(0, box[0]),
-                y: Math.max(0, box[1]),
-                width: Math.abs(box[2] - box[0]),
-                height: Math.abs(box[3] - box[1])
-            }));
-            return boundingBoxes;
-        }
-
-        function postprocessRecognitionResult(result) {
-            // This is a placeholder - you'll need to adjust based on your actual model output
-            const text = result['output'].data.map(charCode => String.fromCharCode(charCode)).join('');
-            return text;
-        }
-
-        async function main(file) {
-            try {
+                // Read the image file
                 const reader = new FileReader();
                 reader.onload = async (event) => {
-                    const imageData = new Uint8Array(event.target.result);
-                    const boundingBoxes = await runDetectionModel(imageData);
-                    
-                    const image = cv.imdecode(imageData);
-                    const croppedImages = boundingBoxes.map(box => {
-                        const rect = new cv.Rect(
-                            Math.max(0, box.x), 
-                            Math.max(0, box.y), 
-                            Math.max(1, box.width), 
-                            Math.max(1, box.height)
-                        );
-                        return image.roi(rect);
-                    });
+                    try {
+                        // Convert ArrayBuffer to Uint8Array
+                        const imageData = new Uint8Array(event.target.result);
 
-                    const recognizedTexts = await runRecognitionModel(croppedImages);
-                    
-                    stopTimer();
-                    alert(`OCR Results:\n${recognizedTexts.join('\n')}`);
+                        // Use OpenCV to decode the image
+                        const mat = cv.matFromArray(imageData);
+                        
+                        // Display image preview
+                        const imgPreview = document.getElementById('imagePreview');
+                        const canvas = document.getElementById('canvas');
+                        cv.imshow(canvas, mat);
+                        imgPreview.src = canvas.toDataURL();
+                        imgPreview.style.display = 'block';
 
-                    // Clean up
-                    image.delete();
-                    croppedImages.forEach(img => img.delete());
+                        // Placeholder for further processing
+                        updateStatus('Image processed successfully');
+                        
+                        // Clean up
+                        mat.delete();
+                    } catch (processError) {
+                        updateStatus(`Image processing error: ${processError.message}`, true);
+                        console.error(processError);
+                    }
                 };
                 reader.readAsArrayBuffer(file);
-
-                // Set the image preview
-                const imgPreview = document.getElementById('imagePreview');
-                imgPreview.src = URL.createObjectURL(file);
-                imgPreview.style.display = 'block';
             } catch (error) {
-                console.error('OCR processing error:', error);
-                stopTimer();
-                alert('Error processing image');
+                updateStatus(`Error processing image: ${error.message}`, true);
+                console.error(error);
             }
         }
 
-        document.getElementById('imageUpload').addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            if (file) {
-                // Reset preview
-                const imgPreview = document.getElementById('imagePreview');
-                imgPreview.src = '';
-                imgPreview.style.display = 'none';
-            } else {
-                console.log('No file selected');
-            }
-        });
-
-        document.getElementById('extractButton').addEventListener('click', () => {
-            const file = document.getElementById('imageUpload').files[0];
-            if (file) {
-                startTimer();
-                main(file);
-            } else {
-                alert('Please select an image first.');
-            }
-        });
-
-        // Ensure OpenCV and models are ready
+        // Event Listeners
         document.addEventListener('DOMContentLoaded', () => {
-            if (typeof cv !== 'undefined' && typeof ort !== 'undefined') {
-                console.log('OpenCV.js and ONNX Runtime are ready');
-            } else {
-                console.error('Required libraries not loaded');
-            }
+            // Disable extract button until libraries are loaded
+            document.getElementById('extractButton').disabled = true;
+            
+            // Initialize libraries
+            initializeLibraries();
+
+            // Image upload listener
+            document.getElementById('imageUpload').addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    startTimer();
+                    processImage(file);
+                } else {
+                    updateStatus('No file selected', true);
+                }
+            });
+
+            // Extract button listener
+            document.getElementById('extractButton').addEventListener('click', () => {
+                const file = document.getElementById('imageUpload').files[0];
+                if (file) {
+                    startTimer();
+                    processImage(file);
+                } else {
+                    updateStatus('Please select an image first', true);
+                }
+            });
         });
     </script>
 </body>
