@@ -34,9 +34,9 @@ function preprocessImageForDetection(image) {
 
 // Preprocess the image for the recognition model (example function, adjust as needed)
 function preprocessImageForRecognition(image) {
-    const resizedImage = image.resize(320, 32); // Resize to the input size expected by the recognition model
+    const resizedImage = image.resize(128, 32); // Resize to the input size expected by the recognition model
     const normalizedImage = resizedImage.float32Array().div(255.0); // Normalize the image
-    return new ort.Tensor('float32', normalizedImage, [1, 3, 32, 320]); // Convert to ONNX tensor
+    return new ort.Tensor('float32', normalizedImage, [1, 3, 32, 128]); // Convert to ONNX tensor
 }
 
 // Postprocess the detection results (example function, adjust as needed)
