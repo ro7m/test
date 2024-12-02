@@ -4,16 +4,49 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Text Extract</title>
+    <style>
+        #timer {
+            font-size: 1.5em;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
     <input type="file" id="imageUpload" accept="image/*">
     <img id="imagePreview" alt="Image Preview" style="max-width: 100%; max-height: 300px; margin-top: 10px;">
+    <button id="extractButton" style="margin-top: 10px;">Extract Text</button>
+    <div id="timer">00:00:00</div>
     <canvas id="canvas" style="display: none;"></canvas>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/opencv-wasm@4.5.3/build/opencv.js"></script>
     <script>
+        let startTime;
+        let timerInterval;
+
+        function startTimer() {
+            startTime = new Date();
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+
+        function updateTimer() {
+            const currentTime = new Date();
+            const timeDifference = currentTime - startTime;
+            const seconds = Math.floor(timeDifference / 1000) % 60;
+            const minutes = Math.floor(timeDifference / (1000 * 60)) % 60;
+            const hours = Math.floor(timeDifference / (1000 * 60 * 60));
+            document.getElementById('timer').innerText = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        }
+
+        function pad(value) {
+            return value < 10 ? `0${value}` : value;
+        }
+
         async function runDetectionModel(imageData) {
-            const session = await ort.InferenceSession.create('https://allorigins.me/get?url=https:%3A%2F%2F%github.com%2F%ro7m%2F%test%2F%releases%2F%download%2F%v1.0.0%2F%rep_fast_base.onnx');
+            const session = await ort.InferenceSession.create('https://cdn.jsdelivr.net/gh/ro7m/test@v1.0.0/rep_fast_base.onnx');
             const image = cv.imdecode(imageData);
             const inputTensor = preprocessImageForDetection(image); // Preprocess the image as required by the detection model
             const feeds = { 'input': inputTensor };
@@ -22,7 +55,7 @@
         }
 
         async function runRecognitionModel(croppedImages) {
-            const session = await ort.InferenceSession.create('https://allorigins.me/get?url=https:%3A%2F%2F%github.com%2F%ro7m%2F%test%2F%releases%2F%download%2F%v1.0.0%2F%parseq_dynamic.onnx');
+            const session = await ort.InferenceSession.create('https://cdn.jsdelivr.net/gh/ro7m/test@v1.0.0/parseq_dynamic.onnx');
             const results = [];
             for (const croppedImage of croppedImages) {
                 const inputTensor = preprocessImageForRecognition(croppedImage); // Preprocess the cropped image as required by the recognition model
@@ -69,6 +102,8 @@
                 const croppedImages = boundingBoxes.map(box => image.getRegion(new cv.Rect(box.x, box.y, box.width, box.height)));
                 const recognizedTexts = await runRecognitionModel(croppedImages);
                 console.log(recognizedTexts);
+                stopTimer();
+                alert(`OCR Results:\n${recognizedTexts.join('\n')}`);
             };
             reader.readAsArrayBuffer(file);
 
@@ -83,6 +118,16 @@
                 main(file);
             } else {
                 console.log('No file selected');
+            }
+        });
+
+        document.getElementById('extractButton').addEventListener('click', () => {
+            const file = document.getElementById('imageUpload').files[0];
+            if (file) {
+                startTimer();
+                main(file);
+            } else {
+                alert('Please select an image first.');
             }
         });
 
