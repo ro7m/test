@@ -17,7 +17,6 @@
     <div id="timer">00:00:00</div>
     <canvas id="canvas" style="display: none;"></canvas>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/opencv-wasm@4.3.0-10/opencv.js"></script>
     <script>
         let startTime;
         let timerInterval;
@@ -44,8 +43,15 @@
             return value < 10 ? `0${value}` : value;
         }
 
+        // Pre-load the WASM file
+        async function preloadWasm() {
+            const response = await fetch('https://cdn.jsdelivr.net/npm/opencv-wasm@4.5.3/build/opencv.wasm');
+            const arrayBuffer = await response.arrayBuffer();
+            Module['wasmBinary'] = arrayBuffer;
+        }
+
         async function runDetectionModel(imageData) {
-            const session = await ort.InferenceSession.create('models/rep_fast_base.onnx');
+            const session = await ort.InferenceSession.create('https://cdn.jsdelivr.net/gh/ro7m/test@v1.0.0/rep_fast_base.onnx');
             const image = cv.imdecode(imageData);
             const inputTensor = preprocessImageForDetection(image); // Preprocess the image as required by the detection model
             const feeds = { 'input': inputTensor };
@@ -54,7 +60,7 @@
         }
 
         async function runRecognitionModel(croppedImages) {
-            const session = await ort.InferenceSession.create('models/parseq_dynamic.onnx');
+            const session = await ort.InferenceSession.create('https://cdn.jsdelivr.net/gh/ro7m/test@v1.0.0/parseq_dynamic.onnx');
             const results = [];
             for (const croppedImage of croppedImages) {
                 const inputTensor = preprocessImageForRecognition(croppedImage); // Preprocess the cropped image as required by the recognition model
@@ -134,11 +140,18 @@
         function onOpenCvReady() {
             console.log('OpenCV.js is ready');
         }
-        if (typeof cv !== 'undefined') {
-            onOpenCvReady();
-        } else {
-            document.addEventListener('load', onOpenCvReady);
+
+        // Pre-load the WASM file and initialize OpenCV.js
+        async function init() {
+            await preloadWasm();
+            if (typeof cv !== 'undefined') {
+                onOpenCvReady();
+            } else {
+                document.addEventListener('load', onOpenCvReady);
+            }
         }
+
+        init();
     </script>
 </body>
 </html>
