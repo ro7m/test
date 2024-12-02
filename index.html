@@ -1,8 +1,9 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Text Extract</title>
+    <title>Simple OCR Text Extractor</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -11,313 +12,114 @@
             padding: 20px;
             text-align: center;
         }
-        #timer {
-            font-size: 1.5em;
-            margin-top: 10px;
-            color: #333;
-        }
         #imagePreview {
             max-width: 100%;
             max-height: 300px;
             margin-top: 10px;
-            border: 1px solid #ddd;
-        }
-        #extractButton, #uploadButton {
-            margin-top: 10px;
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
         }
         #status {
             color: red;
-            margin-top: 10px;
-            word-wrap: break-word;
-        }
-        #debugLog {
-            text-align: left;
-            max-height: 200px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            padding: 10px;
-            margin-top: 10px;
-            font-family: monospace;
+            margin: 10px 0;
         }
     </style>
 </head>
 <body>
-    <h1>OCR Text Extractor</h1>
+    <h1>Simple OCR Text Extractor</h1>
     <div id="status"></div>
-    <div id="debugLog"></div>
     
-    <input type="file" id="imageUpload" accept="image/*" style="display:none;">
-    <button id="uploadButton">Select Image</button>
-    <img id="imagePreview" alt="Image Preview" style="display: none;">
+    <input type="file" id="imageUpload" accept="image/*">
+    <img id="imagePreview" style="display:none;">
     
-    <button id="extractButton" style="margin-top: 10px;">Extract Text</button>
-    <div id="timer">00:00:00</div>
-    <canvas id="canvas" style="display: none;"></canvas>
-
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <script src="https://docs.opencv.org/4.5.2/opencv.js"></script>
 
     <script>
-        // Comprehensive logging function
-        function debugLog(message, isError = false) {
-            const debugElement = document.getElementById('debugLog');
-            const logEntry = document.createElement('div');
-            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-            logEntry.style.color = isError ? 'red' : 'black';
-            debugElement.appendChild(logEntry);
-            debugElement.scrollTop = debugElement.scrollHeight;
-            
-            // Also log to console
-            if (isError) {
-                console.error(message);
-            } else {
-                console.log(message);
-            }
-        }
-
-        // Status update function
+        // Simplified logging function
         function updateStatus(message, isError = false) {
             const statusElement = document.getElementById('status');
             statusElement.textContent = message;
             statusElement.style.color = isError ? 'red' : 'green';
-            debugLog(message, isError);
+            console.log(isError ? 'ERROR:' : 'STATUS:', message);
         }
 
-        // Global state tracking
-        const AppState = {
-            openCVLoaded: false,
-            onnxLoaded: false,
-            librariesReady: false
-        };
+        // Check library availability
+        function checkLibraries() {
+            const onnxAvailable = typeof ort !== 'undefined';
+            const opencvAvailable = typeof cv !== 'undefined';
 
-        // Wait for OpenCV to load
-        function waitForOpenCV() {
-            return new Promise((resolve, reject) => {
-                const maxAttempts = 100;
-                let attempts = 0;
-
-                function checkOpenCV() {
-                    attempts++;
-                    try {
-                        if (typeof cv !== 'undefined' && cv.getBuildInformation) {
-                            AppState.openCVLoaded = true;
-                            debugLog('OpenCV.js loaded successfully');
-                            resolve(cv);
-                            return;
-                        }
-                    } catch (error) {
-                        debugLog(`OpenCV check error: ${error.message}`, true);
-                    }
-
-                    if (attempts > maxAttempts) {
-                        const error = new Error('OpenCV.js failed to load');
-                        debugLog(error.message, true);
-                        reject(error);
-                    } else {
-                        setTimeout(checkOpenCV, 100);
-                    }
-                }
-
-                checkOpenCV();
-            });
-        }
-
-        // Wait for ONNX Runtime to load
-        function waitForONNX() {
-            return new Promise((resolve, reject) => {
-                const maxAttempts = 100;
-                let attempts = 0;
-
-                function checkONNX() {
-                    attempts++;
-                    try {
-                        if (typeof ort !== 'undefined' && ort.InferenceSession) {
-                            AppState.onnxLoaded = true;
-                            debugLog('ONNX Runtime loaded successfully');
-                            resolve(ort);
-                            return;
-                        }
-                    } catch (error) {
-                        debugLog(`ONNX check error: ${error.message}`, true);
-                    }
-
-                    if (attempts > maxAttempts) {
-                        const error = new Error('ONNX Runtime failed to load');
-                        debugLog(error.message, true);
-                        reject(error);
-                    } else {
-                        setTimeout(checkONNX, 100);
-                    }
-                }
-
-                checkONNX();
-            });
-        }
-
-        // Main initialization
-        async function initializeLibraries() {
-            try {
-                debugLog('Initializing libraries...');
-                
-                await Promise.all([
-                    waitForOpenCV(), 
-                    waitForONNX()
-                ]);
-
-                AppState.librariesReady = true;
-                updateStatus('Libraries loaded successfully');
-                enableButtons(true);
-            } catch (error) {
-                updateStatus(`Initialization error: ${error.message}`, true);
-                enableButtons(false);
+            if (!onnxAvailable) {
+                updateStatus('ONNX Runtime failed to load', true);
+                return false;
             }
+
+            if (!opencvAvailable) {
+                updateStatus('OpenCV.js failed to load', true);
+                return false;
+            }
+
+            updateStatus('Libraries loaded successfully');
+            return true;
         }
 
-        // Enable/Disable buttons
-        function enableButtons(enable) {
-            const uploadButton = document.getElementById('uploadButton');
-            const extractButton = document.getElementById('extractButton');
-            const imageUpload = document.getElementById('imageUpload');
-
-            uploadButton.disabled = !enable;
-            extractButton.disabled = !enable;
-            imageUpload.disabled = !enable;
-
-            debugLog(`Buttons ${enable ? 'enabled' : 'disabled'}`);
-        }
-
-        // Timer functions
-        let startTime, timerInterval;
-
-        function startTimer() {
-            startTime = new Date();
-            timerInterval = setInterval(updateTimer, 1000);
-        }
-
-        function stopTimer() {
-            clearInterval(timerInterval);
-        }
-
-        function updateTimer() {
-            const currentTime = new Date();
-            const timeDifference = currentTime - startTime;
-            const seconds = Math.floor(timeDifference / 1000) % 60;
-            const minutes = Math.floor(timeDifference / (1000 * 60)) % 60;
-            const hours = Math.floor(timeDifference / (1000 * 60 * 60));
-            document.getElementById('timer').innerText = 
-                `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-        }
-
-        function pad(value) {
-            return value < 10 ? `0${value}` : value;
-        }
-
-        // Image processing function
+        // Simple image processing function
         function processImage(file) {
-            debugLog(`Processing image: ${file.name}`);
-
-            if (!AppState.librariesReady) {
-                updateStatus('Libraries not fully loaded', true);
-                return;
-            }
-
             try {
+                // Create file reader
                 const reader = new FileReader();
-                
-                reader.onloadstart = () => {
-                    debugLog('File reading started');
-                };
-
-                reader.onerror = (event) => {
-                    debugLog(`File reading error: ${event.target.error}`, true);
-                };
 
                 reader.onload = (event) => {
                     try {
-                        debugLog('File reading completed');
+                        // Verify libraries are loaded
+                        if (!checkLibraries()) {
+                            updateStatus('Libraries not loaded', true);
+                            return;
+                        }
+
+                        // Convert to Uint8Array
                         const imageData = new Uint8Array(event.target.result);
 
-                        // Use OpenCV to decode and process the image
-                        const mat = cv.matFromArray(imageData);
-                        
+                        // Decode image
+                        const mat = cv.imdecode(imageData);
+
                         // Display image preview
                         const imgPreview = document.getElementById('imagePreview');
-                        const canvas = document.getElementById('canvas');
+                        const canvas = document.createElement('canvas');
                         cv.imshow(canvas, mat);
                         imgPreview.src = canvas.toDataURL();
                         imgPreview.style.display = 'block';
 
-                        debugLog('Image processed successfully');
-                        
                         // Clean up
                         mat.delete();
+
+                        updateStatus('Image processed successfully');
                     } catch (processError) {
-                        debugLog(`Image processing error: ${processError.message}`, true);
+                        updateStatus(`Image processing error: ${processError.message}`, true);
+                        console.error(processError);
                     }
                 };
 
                 reader.readAsArrayBuffer(file);
             } catch (error) {
-                debugLog(`Error in processImage: ${error.message}`, true);
+                updateStatus(`Error processing image: ${error.message}`, true);
+                console.error(error);
             }
         }
 
-        // Event Listeners Setup
-        function setupEventListeners() {
-            debugLog('Setting up event listeners');
-
-            // Upload button to trigger file input
-            const uploadButton = document.getElementById('uploadButton');
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', () => {
             const imageUpload = document.getElementById('imageUpload');
-            
-            uploadButton.addEventListener('click', () => {
-                debugLog('Upload button clicked');
-                imageUpload.click();
-            });
 
-            // File input change event
             imageUpload.addEventListener('change', (event) => {
-                debugLog('File input changed');
                 const file = event.target.files[0];
                 if (file) {
-                    startTimer();
                     processImage(file);
                 } else {
-                    debugLog('No file selected', true);
+                    updateStatus('No file selected', true);
                 }
             });
 
-            // Extract button
-            const extractButton = document.getElementById('extractButton');
-            extractButton.addEventListener('click', () => {
-                debugLog('Extract button clicked');
-                const file = document.getElementById('imageUpload').files[0];
-                if (file) {
-                    startTimer();
-                    processImage(file);
-                } else {
-                    debugLog('Please select an image first', true);
-                }
-            });
-        }
-
-        // Initialize on DOM load
-        document.addEventListener('DOMContentLoaded', () => {
-            debugLog('DOM Content Loaded');
-            
-            // Disable buttons initially
-            enableButtons(false);
-            
-            // Setup event listeners
-            setupEventListeners();
-            
-            // Initialize libraries
-            initializeLibraries();
+            // Initial library check
+            checkLibraries();
         });
     </script>
 </body>
