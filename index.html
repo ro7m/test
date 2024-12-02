@@ -17,6 +17,7 @@
     <div id="timer">00:00:00</div>
     <canvas id="canvas" style="display: none;"></canvas>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/opencv-wasm/opencv.js"></script>
     <script>
         let startTime;
         let timerInterval;
@@ -139,19 +140,20 @@
         // Ensure OpenCV.js is loaded before running the script
         function onOpenCvReady() {
             console.log('OpenCV.js is ready');
+            preloadWasm().then(() => {
+                console.log('WASM file preloaded successfully');
+            }).catch(error => {
+                console.error('Failed to preload WASM file:', error);
+            });
         }
 
-        // Pre-load the WASM file and initialize OpenCV.js
-        async function init() {
-            await preloadWasm();
-            if (typeof cv !== 'undefined') {
-                onOpenCvReady();
-            } else {
-                document.addEventListener('load', onOpenCvReady);
-            }
-        }
+        // Initialize OpenCV.js
+        if (typeof cv !== 'undefined') {
+            onOpenCvReady();
+        } else {
+            document.addEventListener('load', onOpenCvReady);
+        }        
 
-        init();
     </script>
 </body>
 </html>
