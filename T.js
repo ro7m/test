@@ -12,7 +12,7 @@
     <script src="https://cdn.jsdelivr.net/npm/opencv-wasm@4.5.3/build/opencv.js"></script>
     <script>
         async function runDetectionModel(imageData) {
-            const session = await ort.InferenceSession.create('detection_model.onnx');
+            const session = await ort.InferenceSession.create('https://github.com/ro7m/test/releases/download/v1.0.0/rep_fast_base.onnx');
             const image = cv.imdecode(imageData);
             const inputTensor = preprocessImageForDetection(image); // Preprocess the image as required by the detection model
             const feeds = { 'input': inputTensor };
@@ -21,7 +21,7 @@
         }
 
         async function runRecognitionModel(croppedImages) {
-            const session = await ort.InferenceSession.create('recognition_model.onnx');
+            const session = await ort.InferenceSession.create('https://github.com/ro7m/test/releases/download/v1.0.0/parseq_dynamic.onnx');
             const results = [];
             for (const croppedImage of croppedImages) {
                 const inputTensor = preprocessImageForRecognition(croppedImage); // Preprocess the cropped image as required by the recognition model
