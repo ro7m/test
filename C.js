@@ -1,8 +1,9 @@
 // Constants (updated to match Python implementation)
 const DET_MEAN = [0.798, 0.785, 0.772];
 const DET_STD = [0.264, 0.2749, 0.287];
-const REC_MEAN = 0.694;
-const REC_STD = 0.298;
+const REC_MEAN = [0.694, 0.695, 0.693];
+const REC_STD = [0.299, 0.296, 0.301];
+
 const VOCAB = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~°£€¥¢฿àâéèêëîïôùûüçÀÂÉÈÊËÎÏÔÙÛÜÇ<eos><sos><pad>";
 
 // DOM Elements (unchanged)
