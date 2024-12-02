@@ -46,7 +46,7 @@
         }
 
         async function runDetectionModel(imageData) {
-            const session = await ort.InferenceSession.create('https://cdn.jsdelivr.net/gh/ro7m/test@v1.0.0/rep_fast_base.onnx');
+            const session = await ort.InferenceSession.create('https://huggingface.co/Felix92/onnxtr-fast-base/blob/main/model.onnx');
             const image = cv.imdecode(imageData);
             const inputTensor = preprocessImageForDetection(image); // Preprocess the image as required by the detection model
             const feeds = { 'input': inputTensor };
@@ -55,7 +55,7 @@
         }
 
         async function runRecognitionModel(croppedImages) {
-            const session = await ort.InferenceSession.create('https://cdn.jsdelivr.net/gh/ro7m/test@v1.0.0/parseq_dynamic.onnx');
+            const session = await ort.InferenceSession.create('https://huggingface.co/Felix92/onnxtr-parseq/blob/main/model.onnx');
             const results = [];
             for (const croppedImage of croppedImages) {
                 const inputTensor = preprocessImageForRecognition(croppedImage); // Preprocess the cropped image as required by the recognition model
