@@ -129,6 +129,7 @@
             reader.onload = async (event) => {
                 const imageData = new Uint8Array(event.target.result);
                 const boundingBoxes = await runDetectionModel(imageData);
+                console.log(boundingBoxes);
                 const image = cv.imdecode(imageData);
                 const croppedImages = boundingBoxes.map(box => image.getRegion(new cv.Rect(box.x, box.y, box.width, box.height)));
                 const recognizedTexts = await runRecognitionModel(croppedImages);
