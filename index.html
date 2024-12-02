@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -23,7 +22,7 @@
             margin-top: 10px;
             border: 1px solid #ddd;
         }
-        #extractButton {
+        #extractButton, #uploadButton {
             margin-top: 10px;
             padding: 10px 20px;
             background-color: #4CAF50;
@@ -34,14 +33,28 @@
         #status {
             color: red;
             margin-top: 10px;
+            word-wrap: break-word;
+        }
+        #debugLog {
+            text-align: left;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
         }
     </style>
 </head>
 <body>
     <h1>OCR Text Extractor</h1>
     <div id="status"></div>
-    <input type="file" id="imageUpload" accept="image/*">
+    <div id="debugLog"></div>
+    
+    <input type="file" id="imageUpload" accept="image/*" style="display:none;">
+    <button id="uploadButton">Select Image</button>
     <img id="imagePreview" alt="Image Preview" style="display: none;">
+    
     <button id="extractButton" style="margin-top: 10px;">Extract Text</button>
     <div id="timer">00:00:00</div>
     <canvas id="canvas" style="display: none;"></canvas>
@@ -50,33 +63,61 @@
     <script src="https://docs.opencv.org/4.5.2/opencv.js"></script>
 
     <script>
-        // Global status and logging function
+        // Comprehensive logging function
+        function debugLog(message, isError = false) {
+            const debugElement = document.getElementById('debugLog');
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logEntry.style.color = isError ? 'red' : 'black';
+            debugElement.appendChild(logEntry);
+            debugElement.scrollTop = debugElement.scrollHeight;
+            
+            // Also log to console
+            if (isError) {
+                console.error(message);
+            } else {
+                console.log(message);
+            }
+        }
+
+        // Status update function
         function updateStatus(message, isError = false) {
             const statusElement = document.getElementById('status');
             statusElement.textContent = message;
             statusElement.style.color = isError ? 'red' : 'green';
-            console.log(isError ? 'ERROR:' : 'STATUS:', message);
+            debugLog(message, isError);
         }
 
-        // Detect library loading
-        let openCVLoaded = false;
-        let onnxLoaded = false;
+        // Global state tracking
+        const AppState = {
+            openCVLoaded: false,
+            onnxLoaded: false,
+            librariesReady: false
+        };
 
         // Wait for OpenCV to load
         function waitForOpenCV() {
             return new Promise((resolve, reject) => {
-                const maxAttempts = 50;
+                const maxAttempts = 100;
                 let attempts = 0;
 
                 function checkOpenCV() {
                     attempts++;
-                    if (typeof cv !== 'undefined' && cv.getBuildInformation) {
-                        openCVLoaded = true;
-                        updateStatus('OpenCV.js loaded successfully');
-                        resolve(cv);
-                    } else if (attempts > maxAttempts) {
-                        updateStatus('Failed to load OpenCV.js', true);
-                        reject(new Error('OpenCV.js failed to load'));
+                    try {
+                        if (typeof cv !== 'undefined' && cv.getBuildInformation) {
+                            AppState.openCVLoaded = true;
+                            debugLog('OpenCV.js loaded successfully');
+                            resolve(cv);
+                            return;
+                        }
+                    } catch (error) {
+                        debugLog(`OpenCV check error: ${error.message}`, true);
+                    }
+
+                    if (attempts > maxAttempts) {
+                        const error = new Error('OpenCV.js failed to load');
+                        debugLog(error.message, true);
+                        reject(error);
                     } else {
                         setTimeout(checkOpenCV, 100);
                     }
@@ -89,18 +130,26 @@
         // Wait for ONNX Runtime to load
         function waitForONNX() {
             return new Promise((resolve, reject) => {
-                const maxAttempts = 50;
+                const maxAttempts = 100;
                 let attempts = 0;
 
                 function checkONNX() {
                     attempts++;
-                    if (typeof ort !== 'undefined' && ort.InferenceSession) {
-                        onnxLoaded = true;
-                        updateStatus('ONNX Runtime loaded successfully');
-                        resolve(ort);
-                    } else if (attempts > maxAttempts) {
-                        updateStatus('Failed to load ONNX Runtime', true);
-                        reject(new Error('ONNX Runtime failed to load'));
+                    try {
+                        if (typeof ort !== 'undefined' && ort.InferenceSession) {
+                            AppState.onnxLoaded = true;
+                            debugLog('ONNX Runtime loaded successfully');
+                            resolve(ort);
+                            return;
+                        }
+                    } catch (error) {
+                        debugLog(`ONNX check error: ${error.message}`, true);
+                    }
+
+                    if (attempts > maxAttempts) {
+                        const error = new Error('ONNX Runtime failed to load');
+                        debugLog(error.message, true);
+                        reject(error);
                     } else {
                         setTimeout(checkONNX, 100);
                     }
@@ -113,13 +162,33 @@
         // Main initialization
         async function initializeLibraries() {
             try {
-                await Promise.all([waitForOpenCV(), waitForONNX()]);
-                updateStatus('All libraries loaded successfully');
-                document.getElementById('extractButton').disabled = false;
+                debugLog('Initializing libraries...');
+                
+                await Promise.all([
+                    waitForOpenCV(), 
+                    waitForONNX()
+                ]);
+
+                AppState.librariesReady = true;
+                updateStatus('Libraries loaded successfully');
+                enableButtons(true);
             } catch (error) {
                 updateStatus(`Initialization error: ${error.message}`, true);
-                document.getElementById('extractButton').disabled = true;
+                enableButtons(false);
             }
+        }
+
+        // Enable/Disable buttons
+        function enableButtons(enable) {
+            const uploadButton = document.getElementById('uploadButton');
+            const extractButton = document.getElementById('extractButton');
+            const imageUpload = document.getElementById('imageUpload');
+
+            uploadButton.disabled = !enable;
+            extractButton.disabled = !enable;
+            imageUpload.disabled = !enable;
+
+            debugLog(`Buttons ${enable ? 'enabled' : 'disabled'}`);
         }
 
         // Timer functions
@@ -148,22 +217,32 @@
             return value < 10 ? `0${value}` : value;
         }
 
-        // Image processing functions
-        async function processImage(file) {
-            if (!openCVLoaded || !onnxLoaded) {
-                updateStatus('Libraries not loaded', true);
+        // Image processing function
+        function processImage(file) {
+            debugLog(`Processing image: ${file.name}`);
+
+            if (!AppState.librariesReady) {
+                updateStatus('Libraries not fully loaded', true);
                 return;
             }
 
             try {
-                // Read the image file
                 const reader = new FileReader();
-                reader.onload = async (event) => {
+                
+                reader.onloadstart = () => {
+                    debugLog('File reading started');
+                };
+
+                reader.onerror = (event) => {
+                    debugLog(`File reading error: ${event.target.error}`, true);
+                };
+
+                reader.onload = (event) => {
                     try {
-                        // Convert ArrayBuffer to Uint8Array
+                        debugLog('File reading completed');
                         const imageData = new Uint8Array(event.target.result);
 
-                        // Use OpenCV to decode the image
+                        // Use OpenCV to decode and process the image
                         const mat = cv.matFromArray(imageData);
                         
                         // Display image preview
@@ -173,52 +252,72 @@
                         imgPreview.src = canvas.toDataURL();
                         imgPreview.style.display = 'block';
 
-                        // Placeholder for further processing
-                        updateStatus('Image processed successfully');
+                        debugLog('Image processed successfully');
                         
                         // Clean up
                         mat.delete();
                     } catch (processError) {
-                        updateStatus(`Image processing error: ${processError.message}`, true);
-                        console.error(processError);
+                        debugLog(`Image processing error: ${processError.message}`, true);
                     }
                 };
+
                 reader.readAsArrayBuffer(file);
             } catch (error) {
-                updateStatus(`Error processing image: ${error.message}`, true);
-                console.error(error);
+                debugLog(`Error in processImage: ${error.message}`, true);
             }
         }
 
-        // Event Listeners
-        document.addEventListener('DOMContentLoaded', () => {
-            // Disable extract button until libraries are loaded
-            document.getElementById('extractButton').disabled = true;
-            
-            // Initialize libraries
-            initializeLibraries();
+        // Event Listeners Setup
+        function setupEventListeners() {
+            debugLog('Setting up event listeners');
 
-            // Image upload listener
-            document.getElementById('imageUpload').addEventListener('change', (event) => {
+            // Upload button to trigger file input
+            const uploadButton = document.getElementById('uploadButton');
+            const imageUpload = document.getElementById('imageUpload');
+            
+            uploadButton.addEventListener('click', () => {
+                debugLog('Upload button clicked');
+                imageUpload.click();
+            });
+
+            // File input change event
+            imageUpload.addEventListener('change', (event) => {
+                debugLog('File input changed');
                 const file = event.target.files[0];
                 if (file) {
                     startTimer();
                     processImage(file);
                 } else {
-                    updateStatus('No file selected', true);
+                    debugLog('No file selected', true);
                 }
             });
 
-            // Extract button listener
-            document.getElementById('extractButton').addEventListener('click', () => {
+            // Extract button
+            const extractButton = document.getElementById('extractButton');
+            extractButton.addEventListener('click', () => {
+                debugLog('Extract button clicked');
                 const file = document.getElementById('imageUpload').files[0];
                 if (file) {
                     startTimer();
                     processImage(file);
                 } else {
-                    updateStatus('Please select an image first', true);
+                    debugLog('Please select an image first', true);
                 }
             });
+        }
+
+        // Initialize on DOM load
+        document.addEventListener('DOMContentLoaded', () => {
+            debugLog('DOM Content Loaded');
+            
+            // Disable buttons initially
+            enableButtons(false);
+            
+            // Setup event listeners
+            setupEventListeners();
+            
+            // Initialize libraries
+            initializeLibraries();
         });
     </script>
 </body>
