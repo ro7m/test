@@ -45,7 +45,7 @@
 
         // Pre-load the WASM file
         async function preloadWasm() {
-            const response = await fetch('https://cdn.jsdelivr.net/npm/opencv-wasm@4.5.3/build/opencv.wasm');
+            const response = await fetch('https://cdn.jsdelivr.net/npm/opencv-wasm/opencv.wasm');
             const arrayBuffer = await response.arrayBuffer();
             Module['wasmBinary'] = arrayBuffer;
         }
