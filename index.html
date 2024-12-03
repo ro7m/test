@@ -122,41 +122,45 @@
         console.log(`First 10 bytes: ${uint8Array.slice(0, 10)}`);
 
         try {
-            // Create cv.Mat from array
+            // Decode the image directly
             const imageMat = cv.matFromArray(uint8Array.length, 1, cv.CV_8UC1, uint8Array);
-            console.log(`ImageMat rows: ${imageMat.rows}, cols: ${imageMat.cols}`);
-
-            // Decode the image
             const image = cv.imdecode(imageMat, cv.IMREAD_COLOR);
             if (image.empty()) {
-                console.error('Image decoding failed. OpenCV returned an empty image.');
+                console.warn('Direct decoding failed. Attempting conversion to JPEG...');
+                
+                // Fallback: Convert to JPEG
+                convertToJPEG(file, (jpegDataURL) => {
+                    const byteString = atob(jpegDataURL.split(',')[1]);
+                    const jpegArray = new Uint8Array(byteString.length);
+                    for (let i = 0; i < byteString.length; i++) {
+                        jpegArray[i] = byteString.charCodeAt(i);
+                    }
+                    const jpegMat = cv.matFromArray(jpegArray.length, 1, cv.CV_8UC1, jpegArray);
+                    const jpegImage = cv.imdecode(jpegMat, cv.IMREAD_COLOR);
+                    if (jpegImage.empty()) {
+                        console.error('Image decoding failed after conversion.');
+                        return;
+                    }
+                    console.log('Image successfully decoded after conversion.');
+                    // Proceed with further processing...
+                });
                 return;
             }
 
             console.log('Image successfully decoded.');
-
-            // Proceed with detection model
-            const boundingBoxes = await runDetectionModel(uint8Array);
-            const croppedImages = boundingBoxes.map(box => {
-                const roi = image.roi(new cv.Rect(box.x, box.y, box.width, box.height));
-                const cropped = new cv.Mat();
-                roi.copyTo(cropped);
-                return cropped;
-            });
-
-            const recognizedTexts = await runRecognitionModel(croppedImages);
-            console.log(recognizedTexts);
-            stopTimer();
-            alert(`OCR Results:\n${recognizedTexts.join('\n')}`);
+            // Proceed with further processing...
         } catch (err) {
             console.error('Error during image decoding or processing:', err);
         }
     };
 
     reader.readAsArrayBuffer(file);
+
+    // Set the image preview
     const imgPreview = document.getElementById('imagePreview');
     imgPreview.src = URL.createObjectURL(file);
 }
+
 
 
         document.getElementById('imageUpload').addEventListener('change', (event) => {
