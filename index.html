@@ -161,6 +161,25 @@
     imgPreview.src = URL.createObjectURL(file);
 }
 
+        function convertToJPEG(file, callback) {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            const jpegData = canvas.toDataURL('image/jpeg');
+            callback(jpegData);
+        };
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+
 
 
         document.getElementById('imageUpload').addEventListener('change', (event) => {
@@ -182,6 +201,11 @@
             }
         });
 
+        cv['onRuntimeInitialized'] = async () => {
+    console.log('OpenCV.js is ready');
+    document.getElementById('extractButton').disabled = false;
+};
+        
         function onOpenCvReady() {
             console.log('OpenCV.js is ready');
         }
