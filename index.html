@@ -18,7 +18,7 @@
     <div id="timer">00:00:00</div>
     <canvas id="canvas" style="display: none;"></canvas>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/opencv4nodejs@5.6.0/lib/opencv4nodejs.min.js"></script>">
+    <script src="https://cdn.jsdelivr.net/npm/opencv.js"></script>
     <script>
         let startTime;
         let timerInterval;
@@ -46,36 +46,52 @@
         }
 
         async function runDetectionModel(imageData) {
-            const session = await ort.InferenceSession.create('models/rep_fast_base.onnx');
-            const image = cv.imdecode(imageData);
-            const inputTensor = preprocessImageForDetection(image); // Preprocess the image as required by the detection model
-            const feeds = { 'input': inputTensor };
-            const results = await session.run(feeds);
-            return postprocessDetectionResults(results); // Postprocess the results to get bounding boxes
+            try {
+                const session = await ort.InferenceSession.create('models/rep_fast_base.onnx');
+                const image = cv.imdecode(imageData);
+                const inputTensor = preprocessImageForDetection(image); // Preprocess the image as required by the detection model
+                const feeds = { 'input': inputTensor };
+                const results = await session.run(feeds);
+                return postprocessDetectionResults(results); // Postprocess the results to get bounding boxes
+            } catch (error) {
+                console.error('Error running detection model:', error);
+                return [];
+            }
         }
 
         async function runRecognitionModel(croppedImages) {
-            const session = await ort.InferenceSession.create('models/parseq_dynamic.onnx');
-            const results = [];
-            for (const croppedImage of croppedImages) {
-                const inputTensor = preprocessImageForRecognition(croppedImage); // Preprocess the cropped image as required by the recognition model
-                const feeds = { 'input': inputTensor };
-                const result = await session.run(feeds);
-                results.push(postprocessRecognitionResult(result)); // Postprocess the result to get recognized text
+            try {
+                const session = await ort.InferenceSession.create('models/parseq_dynamic.onnx');
+                const results = [];
+                for (const croppedImage of croppedImages) {
+                    const inputTensor = preprocessImageForRecognition(croppedImage); // Preprocess the cropped image as required by the recognition model
+                    const feeds = { 'input': inputTensor };
+                    const result = await session.run(feeds);
+                    results.push(postprocessRecognitionResult(result)); // Postprocess the result to get recognized text
+                }
+                return results;
+            } catch (error) {
+                console.error('Error running recognition model:', error);
+                return [];
             }
-            return results;
         }
 
         function preprocessImageForDetection(image) {
-            const resizedImage = image.resize(1024, 1024); // Resize to the input size expected by the detection model
-            const normalizedImage = resizedImage.float32Array().div(255.0); // Normalize the image
-            return new ort.Tensor('float32', normalizedImage, [1, 3, 1024, 1024]); // Convert to ONNX tensor
+            const resizedImage = new cv.Mat();
+            cv.resize(image, resizedImage, new cv.Size(1024, 1024), 0, 0, cv.INTER_AREA);
+            const normalizedImage = new cv.Mat();
+            resizedImage.convertTo(normalizedImage, cv.CV_32F, 1.0 / 255.0);
+            const data = new Float32Array(normalizedImage.data32F);
+            return new ort.Tensor('float32', data, [1, 3, 1024, 1024]); // Convert to ONNX tensor
         }
 
         function preprocessImageForRecognition(image) {
-            const resizedImage = image.resize(128, 32); // Resize to the input size expected by the recognition model
-            const normalizedImage = resizedImage.float32Array().div(255.0); // Normalize the image
-            return new ort.Tensor('float32', normalizedImage, [1, 3, 32, 128]); // Convert to ONNX tensor
+            const resizedImage = new cv.Mat();
+            cv.resize(image, resizedImage, new cv.Size(128, 32), 0, 0, cv.INTER_AREA);
+            const normalizedImage = new cv.Mat();
+            resizedImage.convertTo(normalizedImage, cv.CV_32F, 1.0 / 255.0);
+            const data = new Float32Array(normalizedImage.data32F);
+            return new ort.Tensor('float32', data, [1, 3, 32, 128]); // Convert to ONNX tensor
         }
 
         function postprocessDetectionResults(results) {
@@ -99,7 +115,12 @@
                 const imageData = new Uint8Array(event.target.result);
                 const boundingBoxes = await runDetectionModel(imageData);
                 const image = cv.imdecode(imageData);
-                const croppedImages = boundingBoxes.map(box => image.getRegion(new cv.Rect(box.x, box.y, box.width, box.height)));
+                const croppedImages = boundingBoxes.map(box => {
+                    const roi = image.roi(new cv.Rect(box.x, box.y, box.width, box.height));
+                    const cropped = new cv.Mat();
+                    roi.copyTo(cropped);
+                    return cropped;
+                });
                 const recognizedTexts = await runRecognitionModel(croppedImages);
                 console.log(recognizedTexts);
                 stopTimer();
@@ -130,6 +151,12 @@
                 alert('Please select an image first.');
             }
         });
+
+        // Initialize OpenCV
+        function onOpenCvReady() {
+            console.log('OpenCV.js is ready');
+        }
+        onOpenCvReady();
 
     </script>
 </body>
