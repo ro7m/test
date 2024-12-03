@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -17,7 +18,7 @@
     <div id="timer">00:00:00</div>
     <canvas id="canvas" style="display: none;"></canvas>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/opencv4nodejs@5.6.0/lib/opencv4nodejs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/opencv4nodejs@5.6.0/lib/opencv4nodejs.min.js"></script>">
     <script>
         let startTime;
         let timerInterval;
@@ -43,39 +44,6 @@
         function pad(value) {
             return value < 10 ? `0${value}` : value;
         }
-
-        var cv = null;
-
-        async function load_opencv() {
-          if (!window.WebAssembly) {
-            console.log("Your web browser doesn't support WebAssembly.")
-            return
-          }
-        
-          //console.log("loading OpenCv.js")
-          // const script = document.createElement("script")
-          // script.type = "text/javascript"
-          // script.async = "async"
-          // script.src = "https://cdn.jsdelivr.net/npm/opencv4nodejs@5.6.0/lib/cv.js"
-          // document.body.appendChild(script)
-          // script.onload = () => {
-          //   console.log("OpenCV.js is loaded.")
-          // }
-        
-          window.Module = {
-            wasmBinaryFile: `js/opencv_js.wasm`, // for wasm mode
-            preRun: () => {
-              console.log('preRun function on loading opencv')
-            },
-            _main: () => {
-              console.log('OpenCV.js is ready.')
-              //cv = window.cv
-            }
-          }
-          onOpenCvReady();  
-          return
-        }
-    
 
         async function runDetectionModel(imageData) {
             const session = await ort.InferenceSession.create('models/rep_fast_base.onnx');
@@ -130,7 +98,6 @@
             reader.onload = async (event) => {
                 const imageData = new Uint8Array(event.target.result);
                 const boundingBoxes = await runDetectionModel(imageData);
-                console.log(boundingBoxes);
                 const image = cv.imdecode(imageData);
                 const croppedImages = boundingBoxes.map(box => image.getRegion(new cv.Rect(box.x, box.y, box.width, box.height)));
                 const recognizedTexts = await runRecognitionModel(croppedImages);
@@ -164,22 +131,6 @@
             }
         });
 
-        // Ensure OpenCV.js is loaded before running the script
-        function onOpenCvReady() {
-            console.log('OpenCV.js is ready');
-        }
-
-        // Pre-load the WASM file and initialize OpenCV.js
-        async function init() {
-            await load_opencv();
-            if (typeof cv !== 'undefined') {
-                onOpenCvReady();
-            } else {
-                document.addEventListener('load', load_opencv);
-            }
-        }
-
-        init();
     </script>
 </body>
 </html>
