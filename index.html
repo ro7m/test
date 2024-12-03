@@ -48,7 +48,7 @@
         async function runDetectionModel(imageData) {
             try {
                 const session = await ort.InferenceSession.create('models/rep_fast_base.onnx');
-                const image = cv.imdecode(imageData);
+                const image = cv.imdecode(imageData, cv.IMREAD_COLOR);
                 const inputTensor = preprocessImageForDetection(image); // Preprocess the image as required by the detection model
                 const feeds = { 'input': inputTensor };
                 const results = await session.run(feeds);
@@ -114,7 +114,7 @@
             reader.onload = async (event) => {
                 const imageData = new Uint8Array(event.target.result);
                 const boundingBoxes = await runDetectionModel(imageData);
-                const image = cv.imdecode(imageData);
+                const image = cv.imdecode(imageData, cv.IMREAD_COLOR);
                 const croppedImages = boundingBoxes.map(box => {
                     const roi = image.roi(new cv.Rect(box.x, box.y, box.width, box.height));
                     const cropped = new cv.Mat();
