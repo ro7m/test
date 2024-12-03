@@ -48,8 +48,7 @@
         async function runDetectionModel(imageData) {
             try {
                 const session = await ort.InferenceSession.create('models/rep_fast_base.onnx');
-                const image = cv.imdecode(imageData, cv.IMREAD_COLOR);
-                const inputTensor = preprocessImageForDetection(image);
+                const inputTensor = preprocessImageForDetection(imageData);
                 const feeds = { 'input': inputTensor };
                 const results = await session.run(feeds);
                 return postprocessDetectionResults(results);
@@ -114,7 +113,10 @@
             reader.onload = async (event) => {
                 const arrayBuffer = event.target.result;
                 const uint8Array = new Uint8Array(arrayBuffer);
-                const image = cv.imdecode(uint8Array, cv.IMREAD_COLOR);
+                
+                // Wrap imageData in a cv.Mat
+                const imageMat = cv.matFromArray(uint8Array.length, 1, cv.CV_8UC1, uint8Array);
+                const image = cv.imdecode(imageMat, cv.IMREAD_COLOR);
 
                 if (image.empty()) {
                     console.error('Failed to decode image.');
