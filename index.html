@@ -109,36 +109,55 @@
         }
 
         async function main(file) {
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                const arrayBuffer = event.target.result;
-                const uint8Array = new Uint8Array(arrayBuffer);
-                
-                // Wrap imageData in a cv.Mat
-                const imageMat = cv.matFromArray(uint8Array.length, 1, cv.CV_8UC1, uint8Array);
-                const image = cv.imdecode(imageMat, cv.IMREAD_COLOR);
+    if (!file.type.startsWith('image/')) {
+        console.error('Uploaded file is not an image.');
+        return;
+    }
 
-                if (image.empty()) {
-                    console.error('Failed to decode image.');
-                    return;
-                }
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        const arrayBuffer = event.target.result;
+        const uint8Array = new Uint8Array(arrayBuffer);
+        console.log(`Image data size: ${uint8Array.length}`);
+        console.log(`First 10 bytes: ${uint8Array.slice(0, 10)}`);
 
-                const boundingBoxes = await runDetectionModel(uint8Array);
-                const croppedImages = boundingBoxes.map(box => {
-                    const roi = image.roi(new cv.Rect(box.x, box.y, box.width, box.height));
-                    const cropped = new cv.Mat();
-                    roi.copyTo(cropped);
-                    return cropped;
-                });
-                const recognizedTexts = await runRecognitionModel(croppedImages);
-                console.log(recognizedTexts);
-                stopTimer();
-                alert(`OCR Results:\n${recognizedTexts.join('\n')}`);
-            };
-            reader.readAsArrayBuffer(file);
-            const imgPreview = document.getElementById('imagePreview');
-            imgPreview.src = URL.createObjectURL(file);
+        try {
+            // Create cv.Mat from array
+            const imageMat = cv.matFromArray(uint8Array.length, 1, cv.CV_8UC1, uint8Array);
+            console.log(`ImageMat rows: ${imageMat.rows}, cols: ${imageMat.cols}`);
+
+            // Decode the image
+            const image = cv.imdecode(imageMat, cv.IMREAD_COLOR);
+            if (image.empty()) {
+                console.error('Image decoding failed. OpenCV returned an empty image.');
+                return;
+            }
+
+            console.log('Image successfully decoded.');
+
+            // Proceed with detection model
+            const boundingBoxes = await runDetectionModel(uint8Array);
+            const croppedImages = boundingBoxes.map(box => {
+                const roi = image.roi(new cv.Rect(box.x, box.y, box.width, box.height));
+                const cropped = new cv.Mat();
+                roi.copyTo(cropped);
+                return cropped;
+            });
+
+            const recognizedTexts = await runRecognitionModel(croppedImages);
+            console.log(recognizedTexts);
+            stopTimer();
+            alert(`OCR Results:\n${recognizedTexts.join('\n')}`);
+        } catch (err) {
+            console.error('Error during image decoding or processing:', err);
         }
+    };
+
+    reader.readAsArrayBuffer(file);
+    const imgPreview = document.getElementById('imagePreview');
+    imgPreview.src = URL.createObjectURL(file);
+}
+
 
         document.getElementById('imageUpload').addEventListener('change', (event) => {
             const file = event.target.files[0];
