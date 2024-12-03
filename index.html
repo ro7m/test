@@ -142,7 +142,17 @@
                         return;
                     }
                     console.log('Image successfully decoded after conversion.');
-                    // Proceed with further processing...
+                    const boundingBoxes = await runDetectionModel(uint8Array);
+                    const croppedImages = boundingBoxes.map(box => {
+                    const roi = image.roi(new cv.Rect(box.x, box.y, box.width, box.height));
+                    const cropped = new cv.Mat();
+                    roi.copyTo(cropped);
+                    return cropped;
+                });
+                const recognizedTexts = await runRecognitionModel(croppedImages);
+                console.log(recognizedTexts);
+                stopTimer();
+                alert(`OCR Results:\n${recognizedTexts.join('\n')}`);
                 });
                 return;
             }
