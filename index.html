@@ -125,26 +125,35 @@
             // Decode the image directly
             const imageMat = cv.matFromArray(uint8Array.length, 1, cv.CV_8UC1, uint8Array);
             const image = cv.imdecode(imageMat, cv.IMREAD_COLOR);
+            let jpegArray = null;
+            let jpegMat = null;
+            let jpegImage = null;
             if (image.empty()) {
                 console.warn('Direct decoding failed. Attempting conversion to JPEG...');
                 
                 // Fallback: Convert to JPEG
                 convertToJPEG(file, (jpegDataURL) => {
                     const byteString = atob(jpegDataURL.split(',')[1]);
-                    const jpegArray = new Uint8Array(byteString.length);
+                    jpegArray = new Uint8Array(byteString.length);
                     for (let i = 0; i < byteString.length; i++) {
                         jpegArray[i] = byteString.charCodeAt(i);
                     }
-                    const jpegMat = cv.matFromArray(jpegArray.length, 1, cv.CV_8UC1, jpegArray);
-                    const jpegImage = cv.imdecode(jpegMat, cv.IMREAD_COLOR);
+                    jpegMat = cv.matFromArray(jpegArray.length, 1, cv.CV_8UC1, jpegArray);
+                    jpegImage = cv.imdecode(jpegMat, cv.IMREAD_COLOR);
                     if (jpegImage.empty()) {
                         console.error('Image decoding failed after conversion.');
                         return;
                     }
                     console.log('Image successfully decoded after conversion.');
-                    const boundingBoxes = await runDetectionModel(uint8Array);
+                    
+                });
+                return;
+            }
+
+            //console.log('Image successfully decoded.');
+            const boundingBoxes = await runDetectionModel(jpegArray);
                     const croppedImages = boundingBoxes.map(box => {
-                    const roi = image.roi(new cv.Rect(box.x, box.y, box.width, box.height));
+                    const roi = jpegImage.roi(new cv.Rect(box.x, box.y, box.width, box.height));
                     const cropped = new cv.Mat();
                     roi.copyTo(cropped);
                     return cropped;
@@ -153,12 +162,6 @@
                 console.log(recognizedTexts);
                 stopTimer();
                 alert(`OCR Results:\n${recognizedTexts.join('\n')}`);
-                });
-                return;
-            }
-
-            console.log('Image successfully decoded.');
-            // Proceed with further processing...
         } catch (err) {
             console.error('Error during image decoding or processing:', err);
         }
