@@ -17,6 +17,7 @@
     <div id="timer">00:00:00</div>
     <canvas id="canvas" style="display: none;"></canvas>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/opencv4nodejs@5.6.0/lib/opencv4nodejs.min.js"></script>
     <script>
         let startTime;
         let timerInterval;
@@ -51,15 +52,15 @@
             return
           }
         
-          console.log("loading OpenCv.js")
-          const script = document.createElement("script")
-          script.type = "text/javascript"
-          script.async = "async"
-          script.src = "https://cdn.jsdelivr.net/npm/opencv4nodejs@5.6.0/lib/cv.js"
-          document.body.appendChild(script)
-          script.onload = () => {
-            console.log("OpenCV.js is loaded.")
-          }
+          //console.log("loading OpenCv.js")
+          // const script = document.createElement("script")
+          // script.type = "text/javascript"
+          // script.async = "async"
+          // script.src = "https://cdn.jsdelivr.net/npm/opencv4nodejs@5.6.0/lib/cv.js"
+          // document.body.appendChild(script)
+          // script.onload = () => {
+          //   console.log("OpenCV.js is loaded.")
+          // }
         
           window.Module = {
             wasmBinaryFile: `js/opencv_js.wasm`, // for wasm mode
