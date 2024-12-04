@@ -184,15 +184,15 @@ function preprocessImageForRecognition(crops) {
     );
 }
 
-function extractBoundingBoxes(probMap, imageElement) {
-    const binThresh = 0.5;  // Increased threshold for more precise detection
-    const boxThresh = 0.5;  // Increased threshold for box filtering
+  function extractBoundingBoxes(probMap, imageElement) {
+    const binThresh = 0.5;
+    const boxThresh = 0.5;
     const width = 1024;
     const height = 1024;
     const scaleX = imageElement.width / width;
     const scaleY = imageElement.height / height;
 
-    // Binarize the probability map with a higher threshold
+    // Binarize the probability map
     const binaryMap = probMap.map(val => val > binThresh ? 255 : 0);
 
     // Convert to 2D array for processing
@@ -200,55 +200,68 @@ function extractBoundingBoxes(probMap, imageElement) {
         binaryMap.slice(y * width, (y + 1) * width)
     );
 
-    function findContours(bitmap) {
-        const height = bitmap.length;
-        const width = bitmap[0].length;
-        const contours = [];
-        const visited = new Array(height).fill(null).map(() => new Array(width).fill(false));
+    // Find contours using OpenCV.js methods
+    const matBitmap = cv.matFromArray(height, width, cv.CV_8U, bitmap.flat());
+    const contours = new cv.MatVector();
+    const hierarchy = new cv.Mat();
+    
+    cv.findContours(matBitmap, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-        function floodFill(startX, startY) {
-            const contour = [];
-            const stack = [[startX, startY]];
+    const boxes = [];
 
-            while (stack.length > 0) {
-                const [x, y] = stack.pop();
+    for (let i = 0; i < contours.size(); i++) {
+        const contour = contours.get(i);
+        
+        // Create a bounding rectangle
+        const rect = cv.boundingRect(contour);
+        
+        // Convert to points format for scoring
+        const points = [
+            [rect.x, rect.y],
+            [rect.x, rect.y + rect.height],
+            [rect.x + rect.width, rect.y + rect.height],
+            [rect.x + rect.width, rect.y]
+        ];
 
-                if (x < 0 || x >= width || y < 0 || y >= height || 
-                    visited[y][x] || bitmap[y][x] === 0) continue;
+        // Compute box score similar to Python implementation
+        const mask = new cv.Mat.zeros(height, width, cv.CV_8U);
+        const contourPoints = cv.matFromArray(4, 1, cv.CV_32S, points.flat());
+        cv.fillPoly(mask, [contourPoints], new cv.Scalar(255));
+        
+        const maskedPred = new cv.Mat();
+        cv.bitwise_and(cv.matFromArray(height, width, cv.CV_32F, probMap), mask, maskedPred);
+        const score = cv.mean(maskedPred)[0];
 
-                visited[y][x] = true;
-                contour.push([x, y]);
+        // Filter boxes based on score and size
+        if (score > boxThresh && 
+            rect.width > 2 && rect.height > 2) {
+            
+            // Scale to original image dimensions and normalize
+            const scaledBox = [
+                (rect.x / width),
+                (rect.y / height),
+                ((rect.x + rect.width) / width),
+                ((rect.y + rect.height) / height)
+            ];
 
-                // 8-directional flood fill
-                const directions = [
-                    [0,1], [0,-1], [1,0], [-1,0],
-                    [1,1], [1,-1], [-1,1], [-1,-1]
-                ];
-                for (const [dx, dy] of directions) {
-                    const newX = x + dx;
-                    const newY = y + dy;
-                    if (newX >= 0 && newX < width && newY >= 0 && newY < height && 
-                        !visited[newY][newX] && bitmap[newY][newX] !== 0) {
-                        stack.push([newX, newY]);
-                    }
-                }
-            }
-
-            return contour;
+            boxes.push(scaledBox);
         }
 
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                if (!visited[y][x] && bitmap[y][x] !== 0) {
-                    const contour = floodFill(x, y);
-                    if (contour.length > 0) contours.push(contour);
-                }
-            }
-        }
-
-        return contours;
+        // Clean up OpenCV objects
+        contour.delete();
+        mask.delete();
+        contourPoints.delete();
     }
 
+    // Clean up additional OpenCV objects
+    matBitmap.delete();
+    contours.delete();
+    hierarchy.delete();
+
+    return boxes;
+  }
+
+        
     function computeBoxScore(pred, points) {
         // More sophisticated box score computation
         const scores = points.map(([x, y]) => pred[y * width + x]);
