@@ -347,6 +347,8 @@ async function detectAndRecognizeText(imageElement) {
         const batchSize = 16;
         let fullText = '';
 
+        /* for time being remove recognition
+
         for (let i = 0; i < crops.length; i += batchSize) {
             updateLoadingStage(`Processing text batch ${Math.floor(i/batchSize) + 1}...`);
             const batch = crops.slice(i, i + batchSize);
@@ -376,8 +378,9 @@ async function detectAndRecognizeText(imageElement) {
 
         const totalOcrTime = performanceTracker.end('Full OCR Process');
         updateLoadingStage(`OCR completed in ${totalOcrTime.toFixed(2)}ms`);
-        
+        */
         return fullText.trim();
+        
 
     } catch (error) {
         console.error('OCR Processing Error:', error);
