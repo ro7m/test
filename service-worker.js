@@ -2,6 +2,7 @@
 const CACHE_NAME = 'text-extract-v1';
 const urlsToCache = [
   '/',
+  '/models/*'
   '/index.html',
   '/styles.css',
   '/app.js',
