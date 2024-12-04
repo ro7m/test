@@ -146,14 +146,15 @@ async function detectAndRecognizeText(imageElement) {
     console.log('detectionFeed --->' , detectionFeed)
 
     const detectionResults = await detectionModel.run(detectionFeed);
+
     
     console.log('detectionResults:' , detectionResults)
-    console.log('detectionResults.ouput --->' , detectionResults.output)
+    console.log('detectionResults[0] --->' , detectionResults[0])
     
-    const detectionOutput = detectionResults.output.data;
+    //const detectionOutput = detectionResults.output.data;
 
     // Threshold and binarize using sigmoid
-    const probMap = detectionOutput.map(val => 1 / (1 + Math.exp(-val)));
+    const probMap = Object.values(detectionResults)[0].data.map(val => 1 / (1 + Math.exp(-val)));
 
     // Extract bounding boxes (simplified version)
     const boundingBoxes = extractBoundingBoxes(probMap, imageElement);
@@ -198,7 +199,7 @@ async function detectAndRecognizeText(imageElement) {
         };
 
         const recognitionResults = await recognitionModel.run(recognitionFeed);
-        const logits = recognitionResults.output.data;
+        const logits = Object.values(recognitionResults)[0].data;
 
         // Replicate the PARSeq post-processing
         const wordResults = [];
