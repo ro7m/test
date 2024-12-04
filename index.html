@@ -1,229 +1,29 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Text Extract</title>
-    <style>
-        #timer {
-            font-size: 1.5em;
-            margin-top: 10px;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Text Extraction App</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 </head>
 <body>
-    <input type="file" id="imageUpload" accept="image/*">
-    <img id="imagePreview" alt="Image Preview" style="max-width: 100%; max-height: 300px; margin-top: 10px;">
-    <button id="extractButton" style="margin-top: 10px;">Extract Text</button>
-    <div id="timer">00:00:00</div>
-    <canvas id="canvas" style="display: none;"></canvas>
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/opencv.js"></script>
-    <script>
-        let startTime;
-        let timerInterval;
-
-        function startTimer() {
-            startTime = new Date();
-            timerInterval = setInterval(updateTimer, 1000);
-        }
-
-        function stopTimer() {
-            clearInterval(timerInterval);
-        }
-
-        function updateTimer() {
-            const currentTime = new Date();
-            const timeDifference = currentTime - startTime;
-            const seconds = Math.floor(timeDifference / 1000) % 60;
-            const minutes = Math.floor(timeDifference / (1000 * 60)) % 60;
-            const hours = Math.floor(timeDifference / (1000 * 60 * 60));
-            document.getElementById('timer').innerText = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-        }
-
-        function pad(value) {
-            return value < 10 ? `0${value}` : value;
-        }
-
-        async function runDetectionModel(imageData) {
-            try {
-                const session = await ort.InferenceSession.create('models/rep_fast_base.onnx');
-                const inputTensor = preprocessImageForDetection(imageData);
-                const feeds = { 'input': inputTensor };
-                const results = await session.run(feeds);
-                return postprocessDetectionResults(results);
-            } catch (error) {
-                console.error('Error running detection model:', error);
-                return [];
-            }
-        }
-
-        async function runRecognitionModel(croppedImages) {
-            try {
-                const session = await ort.InferenceSession.create('models/parseq_dynamic.onnx');
-                const results = [];
-                for (const croppedImage of croppedImages) {
-                    const inputTensor = preprocessImageForRecognition(croppedImage);
-                    const feeds = { 'input': inputTensor };
-                    const result = await session.run(feeds);
-                    results.push(postprocessRecognitionResult(result));
-                }
-                return results;
-            } catch (error) {
-                console.error('Error running recognition model:', error);
-                return [];
-            }
-        }
-
-        function preprocessImageForDetection(image) {
-            const resizedImage = new cv.Mat();
-            cv.resize(image, resizedImage, new cv.Size(1024, 1024), 0, 0, cv.INTER_AREA);
-            const normalizedImage = new cv.Mat();
-            resizedImage.convertTo(normalizedImage, cv.CV_32F, 1.0 / 255.0);
-            const data = new Float32Array(normalizedImage.data32F);
-            return new ort.Tensor('float32', data, [1, 3, 1024, 1024]);
-        }
-
-        function preprocessImageForRecognition(image) {
-            const resizedImage = new cv.Mat();
-            cv.resize(image, resizedImage, new cv.Size(128, 32), 0, 0, cv.INTER_AREA);
-            const normalizedImage = new cv.Mat();
-            resizedImage.convertTo(normalizedImage, cv.CV_32F, 1.0 / 255.0);
-            const data = new Float32Array(normalizedImage.data32F);
-            return new ort.Tensor('float32', data, [1, 3, 32, 128]);
-        }
-
-        function postprocessDetectionResults(results) {
-            const boundingBoxes = results['output'].data.map(box => ({
-                x: box[0],
-                y: box[1],
-                width: box[2] - box[0],
-                height: box[3] - box[1]
-            }));
-            return boundingBoxes;
-        }
-
-        function postprocessRecognitionResult(result) {
-            const text = result['output'].data.map(charCode => String.fromCharCode(charCode)).join('');
-            return text;
-        }
-
-        async function main(file) {
-    if (!file.type.startsWith('image/')) {
-        console.error('Uploaded file is not an image.');
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-        const arrayBuffer = event.target.result;
-        const uint8Array = new Uint8Array(arrayBuffer);
-        console.log(`Image data size: ${uint8Array.length}`);
-        console.log(`First 10 bytes: ${uint8Array.slice(0, 10)}`);
-
-        try {
-            // Decode the image directly
-            const imageMat = cv.matFromArray(uint8Array.length, 1, cv.CV_8UC1, uint8Array);
-            const image = cv.imdecode(imageMat, cv.IMREAD_COLOR);
-            let jpegArray = null;
-            let jpegMat = null;
-            let jpegImage = null;
-            if (image.empty()) {
-                console.warn('Direct decoding failed. Attempting conversion to JPEG...');
-                
-                // Fallback: Convert to JPEG
-                convertToJPEG(file, (jpegDataURL) => {
-                    const byteString = atob(jpegDataURL.split(',')[1]);
-                    jpegArray = new Uint8Array(byteString.length);
-                    for (let i = 0; i < byteString.length; i++) {
-                        jpegArray[i] = byteString.charCodeAt(i);
-                    }
-                    jpegMat = cv.matFromArray(jpegArray.length, 1, cv.CV_8UC1, jpegArray);
-                    jpegImage = cv.imdecode(jpegMat, cv.IMREAD_COLOR);
-                    if (jpegImage.empty()) {
-                        console.error('Image decoding failed after conversion.');
-                        return;
-                    }
-                    console.log('Image successfully decoded after conversion.');
-                    
-                });
-                //return;
-            }
-
-            //console.log('Image successfully decoded.');
-            const boundingBoxes = await runDetectionModel(jpegArray);
-                    const croppedImages = boundingBoxes.map(box => {
-                    const roi = jpegImage.roi(new cv.Rect(box.x, box.y, box.width, box.height));
-                    const cropped = new cv.Mat();
-                    roi.copyTo(cropped);
-                    return cropped;
-                });
-                const recognizedTexts = await runRecognitionModel(croppedImages);
-                console.log(recognizedTexts);
-                stopTimer();
-                alert(`OCR Results:\n${recognizedTexts.join('\n')}`);
-        } catch (err) {
-            console.error('Error during image decoding or processing:', err);
-        }
-    };
-
-    reader.readAsArrayBuffer(file);
-
-    // Set the image preview
-    const imgPreview = document.getElementById('imagePreview');
-    imgPreview.src = URL.createObjectURL(file);
-}
-
-        function convertToJPEG(file, callback) {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
-            const jpegData = canvas.toDataURL('image/jpeg');
-            callback(jpegData);
-        };
-        img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
-}
-
-
-
-
-        document.getElementById('imageUpload').addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            if (file) {
-                main(file);
-            } else {
-                console.log('No file selected');
-            }
-        });
-
-        document.getElementById('extractButton').addEventListener('click', () => {
-            const file = document.getElementById('imageUpload').files[0];
-            if (file) {
-                startTimer();
-                main(file);
-            } else {
-                alert('Please select an image first.');
-            }
-        });
-
-        cv['onRuntimeInitialized'] = async () => {
-    console.log('OpenCV.js is ready');
-    document.getElementById('extractButton').disabled = false;
-};
-        
-        function onOpenCvReady() {
-            console.log('OpenCV.js is ready');
-        }
-        onOpenCvReady();
-
-    </script>
+    <div class="app-container">
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas" style="display: none;"></canvas>
+        <canvas id="previewCanvas" style="display: none;"></canvas>
+        <div class="controls">
+            <button id="captureButton">Capture</button>
+            <button id="confirmButton" style="display: none;">Confirm</button>
+            <button id="retryButton" style="display: none;">Retry</button>
+            <div id="actionButtons" style="display: none;">
+                <button id="sendButton">Send</button>
+                <button id="discardButton">Discard</button>
+            </div>
+        </div>
+        <div id="result" class="result"></div>
+        <div id="apiResponse" class="api-response"></div>
+    </div>
+    <script src="app.js"></script>
 </body>
 </html>
