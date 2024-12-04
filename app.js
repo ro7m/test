@@ -184,9 +184,6 @@ function preprocessImageForRecognition(crops) {
     );
 }
 
-function decodeText(predictions) {
-    return predictions.map(([word, _]) => word).join(' ');
-}
 
 async function detectAndRecognizeText(imageElement) {
     performanceTracker.start('Full OCR Process');
@@ -272,77 +269,7 @@ async function detectAndRecognizeText(imageElement) {
     }
 }
 
-function extractBoundingBoxes(probMap, imageElement) {
-    // More sophisticated bounding box extraction
-    const threshold = 0.7; // Increased threshold for more confident detections
-    const boxes = [];
-    const width = 1024;
-    const height = 1024;
-    const scaleX = imageElement.width / width;
-    const scaleY = imageElement.height / height;
 
-    // Create a 2D array to track visited pixels
-    const visited = new Array(height).fill(null).map(() => new Array(width).fill(false));
-    
-    function expandBox(x, y) {
-        let minX = x, maxX = x, minY = y, maxY = y;
-        const queue = [[x, y]];
-        
-        while (queue.length > 0) {
-            const [currX, currY] = queue.pop();
-            
-            // Check neighboring pixels
-            const directions = [
-                [0, 1], [0, -1], [1, 0], [-1, 0],
-                [1, 1], [1, -1], [-1, 1], [-1, -1]
-            ];
-            
-            for (const [dx, dy] of directions) {
-                const newX = currX + dx;
-                const newY = currY + dy;
-                
-                if (newX >= 0 && newX < width && newY >= 0 && newY < height &&
-                    !visited[newY][newX] && probMap[newY * width + newX] > threshold) {
-                    
-                    visited[newY][newX] = true;
-                    queue.push([newX, newY]);
-                    
-                    minX = Math.min(minX, newX);
-                    maxX = Math.max(maxX, newX);
-                    minY = Math.min(minY, newY);
-                    maxY = Math.max(maxY, newY);
-                }
-            }
-        }
-        
-        return [minX, minY, maxX, maxY];
-    }
-    
-    // Scan through the probability map
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            const index = y * width + x;
-            if (!visited[y][x] && probMap[index] > threshold) {
-                visited[y][x] = true;
-                const box = expandBox(x, y);
-                
-                // Filter out very small boxes
-                const boxWidth = box[2] - box[0];
-                const boxHeight = box[3] - box[1];
-                if (boxWidth > 10 && boxHeight > 10) {
-                    boxes.push([
-                        box[0] * scaleX,
-                        box[1] * scaleY,
-                        box[2] * scaleX,
-                        box[3] * scaleY
-                    ]);
-                }
-            }
-        }
-    }
-    
-    return boxes;
-}
 
 function getRandomColor() {
     return '#' + Math.floor(Math.random()*16777215).toString(16);
