@@ -185,14 +185,14 @@ function preprocessImageForRecognition(crops) {
 }
 
 function extractBoundingBoxes(probMap, imageElement) {
-    const binThresh = 0.1;  // From Python implementation
-    const boxThresh = 0.1;  // From Python implementation
+    const binThresh = 0.5;  // Increased threshold for more precise detection
+    const boxThresh = 0.5;  // Increased threshold for box filtering
     const width = 1024;
     const height = 1024;
     const scaleX = imageElement.width / width;
     const scaleY = imageElement.height / height;
 
-    // Binarize the probability map
+    // Binarize the probability map with a higher threshold
     const binaryMap = probMap.map(val => val > binThresh ? 255 : 0);
 
     // Convert to 2D array for processing
@@ -201,64 +201,121 @@ function extractBoundingBoxes(probMap, imageElement) {
     );
 
     function findContours(bitmap) {
-    const height = bitmap.length;
-    const width = bitmap[0].length;
-    const contours = [];
-    const visited = new Array(height).fill(null).map(() => new Array(width).fill(false));
+        const height = bitmap.length;
+        const width = bitmap[0].length;
+        const contours = [];
+        const visited = new Array(height).fill(null).map(() => new Array(width).fill(false));
 
-    function floodFill(startX, startY) {
-        const contour = [];
-        const stack = [[startX, startY]];
+        function floodFill(startX, startY) {
+            const contour = [];
+            const stack = [[startX, startY]];
 
-        while (stack.length > 0) {
-            const [x, y] = stack.pop();
+            while (stack.length > 0) {
+                const [x, y] = stack.pop();
 
-            if (x < 0 || x >= width || y < 0 || y >= height || 
-                visited[y][x] || bitmap[y][x] === 0) continue;
+                if (x < 0 || x >= width || y < 0 || y >= height || 
+                    visited[y][x] || bitmap[y][x] === 0) continue;
 
-            visited[y][x] = true;
-            contour.push([x, y]);
+                visited[y][x] = true;
+                contour.push([x, y]);
 
-            // 8-directional flood fill
-            const directions = [
-                [0,1], [0,-1], [1,0], [-1,0],
-                [1,1], [1,-1], [-1,1], [-1,-1]
-            ];
-            for (const [dx, dy] of directions) {
-                const newX = x + dx;
-                const newY = y + dy;
-                if (newX >= 0 && newX < width && newY >= 0 && newY < height && 
-                    !visited[newY][newX] && bitmap[newY][newX] !== 0) {
-                    stack.push([newX, newY]);
+                // 8-directional flood fill
+                const directions = [
+                    [0,1], [0,-1], [1,0], [-1,0],
+                    [1,1], [1,-1], [-1,1], [-1,-1]
+                ];
+                for (const [dx, dy] of directions) {
+                    const newX = x + dx;
+                    const newY = y + dy;
+                    if (newX >= 0 && newX < width && newY >= 0 && newY < height && 
+                        !visited[newY][newX] && bitmap[newY][newX] !== 0) {
+                        stack.push([newX, newY]);
+                    }
+                }
+            }
+
+            return contour;
+        }
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                if (!visited[y][x] && bitmap[y][x] !== 0) {
+                    const contour = floodFill(x, y);
+                    if (contour.length > 0) contours.push(contour);
                 }
             }
         }
 
-        return contour;
+        return contours;
     }
-
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            if (!visited[y][x] && bitmap[y][x] !== 0) {
-                const contour = floodFill(x, y);
-                if (contour.length > 0) contours.push(contour);
-            }
-        }
-    }
-
-    return contours;
-}
 
     function computeBoxScore(pred, points) {
-        // Simplified box score computation
+        // More sophisticated box score computation
         const scores = points.map(([x, y]) => pred[y * width + x]);
-        return scores.reduce((a, b) => a + b, 0) / points.length;
+        const meanScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+        const variance = scores.reduce((sum, score) => 
+            sum + Math.pow(score - meanScore, 2), 0) / scores.length;
+        
+        return {
+            meanScore,
+            variance
+        };
+    }
+
+    function mergeNearbyBoxes(boxes, maxOverlap = 0.3) {
+        // Sort boxes by area (largest first)
+        boxes.sort((a, b) => {
+            const areaA = (a[2] - a[0]) * (a[3] - a[1]);
+            const areaB = (b[2] - b[0]) * (b[3] - b[1]);
+            return areaB - areaA;
+        });
+
+        const mergedBoxes = [];
+        const used = new Array(boxes.length).fill(false);
+
+        for (let i = 0; i < boxes.length; i++) {
+            if (used[i]) continue;
+
+            let bestBox = boxes[i];
+            used[i] = true;
+
+            for (let j = i + 1; j < boxes.length; j++) {
+                if (used[j]) continue;
+
+                // Compute IoU (Intersection over Union)
+                const xA = Math.max(bestBox[0], boxes[j][0]);
+                const yA = Math.max(bestBox[1], boxes[j][1]);
+                const xB = Math.min(bestBox[2], boxes[j][2]);
+                const yB = Math.min(bestBox[3], boxes[j][3]);
+
+                const intersectionArea = Math.max(0, xB - xA) * Math.max(0, yB - yA);
+                const boxAArea = (bestBox[2] - bestBox[0]) * (bestBox[3] - bestBox[1]);
+                const boxBArea = (boxes[j][2] - boxes[j][0]) * (boxes[j][3] - boxes[j][1]);
+
+                const iou = intersectionArea / (boxAArea + boxBArea - intersectionArea);
+
+                if (iou > maxOverlap) {
+                    // Merge boxes
+                    bestBox = [
+                        Math.min(bestBox[0], boxes[j][0]),
+                        Math.min(bestBox[1], boxes[j][1]),
+                        Math.max(bestBox[2], boxes[j][2]),
+                        Math.max(bestBox[3], boxes[j][3])
+                    ];
+                    used[j] = true;
+                }
+            }
+
+            mergedBoxes.push(bestBox);
+        }
+
+        return mergedBoxes;
     }
 
     const contours = findContours(bitmap);
     const boxes = contours.reduce((validBoxes, contour) => {
         // Filter out very small contours
-        if (contour.length < 4) return validBoxes;
+        if (contour.length < 10) return validBoxes;
 
         // Compute bounding box and score
         const xs = contour.map(p => p[0]);
@@ -269,8 +326,16 @@ function extractBoundingBoxes(probMap, imageElement) {
         const y2 = Math.max(...ys);
 
         // Compute box score
-        const boxScore = computeBoxScore(probMap, contour);
-        if (boxScore < boxThresh) return validBoxes;
+        const { meanScore, variance } = computeBoxScore(probMap, contour);
+        
+        // More strict filtering
+        if (meanScore < boxThresh || variance > 0.5) return validBoxes;
+
+        // Aspect ratio filtering to remove unlikely text regions
+        const width = x2 - x1;
+        const height = y2 - y1;
+        const aspectRatio = width / height;
+        if (aspectRatio < 0.1 || aspectRatio > 10) return validBoxes;
 
         // Scale to original image dimensions
         validBoxes.push([
@@ -283,9 +348,12 @@ function extractBoundingBoxes(probMap, imageElement) {
         return validBoxes;
     }, []);
 
-    return boxes;
-}
+    // Merge nearby boxes to reduce fragmentation
+    const mergedBoxes = mergeNearbyBoxes(boxes);
 
+    return mergedBoxes;
+}
+    
 function decodeText(logits, vocab) {
     const sequences = [];
     const vocabLength = vocab.length;
