@@ -184,7 +184,111 @@ function preprocessImageForRecognition(crops) {
     );
 }
 
+function extractBoundingBoxes(probMap, imageElement) {
+    const binThresh = 0.1;  // From Python implementation
+    const boxThresh = 0.1;  // From Python implementation
+    const width = 1024;
+    const height = 1024;
+    const scaleX = imageElement.width / width;
+    const scaleY = imageElement.height / height;
 
+    // Binarize the probability map
+    const binaryMap = probMap.map(val => val > binThresh ? 255 : 0);
+
+    // Convert to 2D array for processing
+    const bitmap = new Array(height).fill(null).map((_, y) => 
+        binaryMap.slice(y * width, (y + 1) * width)
+    );
+
+    function findContours(bitmap) {
+        // This is a simplified version. In a real-world scenario, 
+        // you'd use OpenCV.js for more accurate contour detection
+        const contours = [];
+        const visited = new Array(height).fill(null).map(() => new Array(width).fill(false));
+
+        function floodFill(x, y, contour) {
+            if (x < 0 || x >= width || y < 0 || y >= height || 
+                visited[y][x] || bitmap[y][x] === 0) return;
+
+            visited[y][x] = true;
+            contour.push([x, y]);
+
+            // 8-directional flood fill
+            const directions = [
+                [0,1], [0,-1], [1,0], [-1,0],
+                [1,1], [1,-1], [-1,1], [-1,-1]
+            ];
+            for (const [dx, dy] of directions) {
+                floodFill(x + dx, y + dy, contour);
+            }
+        }
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                if (!visited[y][x] && bitmap[y][x] !== 0) {
+                    const contour = [];
+                    floodFill(x, y, contour);
+                    if (contour.length > 0) contours.push(contour);
+                }
+            }
+        }
+
+        return contours;
+    }
+
+    function computeBoxScore(pred, points) {
+        // Simplified box score computation
+        const scores = points.map(([x, y]) => pred[y * width + x]);
+        return scores.reduce((a, b) => a + b, 0) / points.length;
+    }
+
+    const contours = findContours(bitmap);
+    const boxes = contours.reduce((validBoxes, contour) => {
+        // Filter out very small contours
+        if (contour.length < 4) return validBoxes;
+
+        // Compute bounding box and score
+        const xs = contour.map(p => p[0]);
+        const ys = contour.map(p => p[1]);
+        const x1 = Math.min(...xs);
+        const y1 = Math.min(...ys);
+        const x2 = Math.max(...xs);
+        const y2 = Math.max(...ys);
+
+        // Compute box score
+        const boxScore = computeBoxScore(probMap, contour);
+        if (boxScore < boxThresh) return validBoxes;
+
+        // Scale to original image dimensions
+        validBoxes.push([
+            x1 * scaleX,
+            y1 * scaleY,
+            x2 * scaleX,
+            y2 * scaleY
+        ]);
+
+        return validBoxes;
+    }, []);
+
+    return boxes;
+}
+
+function decodeText(logits, vocab) {
+    const sequences = [];
+    const vocabLength = vocab.length;
+
+    // Assuming logits is a 2D array of predictions for each crop
+    for (let i = 0; i < logits.length / vocabLength; i++) {
+        const seqLogits = logits.slice(i * vocabLength, (i + 1) * vocabLength);
+        const sequence = seqLogits.map(sequenceLogits => {
+            const maxIndex = sequenceLogits.indexOf(Math.max(...sequenceLogits));
+            return vocab[maxIndex];
+        }).join('').trim();
+        sequences.push(sequence);
+    }
+
+    return sequences;
+}
 async function detectAndRecognizeText(imageElement) {
     performanceTracker.start('Full OCR Process');
     updateLoadingStage('Processing image...');
