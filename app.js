@@ -184,7 +184,8 @@ function preprocessImageForRecognition(crops) {
     );
 }
 
-  function extractBoundingBoxes(probMap, imageElement) {
+
+function extractBoundingBoxes(probMap, imageElement) {
     const binThresh = 0.5;
     const boxThresh = 0.5;
     const width = 1024;
@@ -192,16 +193,17 @@ function preprocessImageForRecognition(crops) {
     const scaleX = imageElement.width / width;
     const scaleY = imageElement.height / height;
 
-    // Binarize the probability map
-    const binaryMap = probMap.map(val => val > binThresh ? 255 : 0);
+    // Create binary matrix
+    const matBitmap = cv.Mat.zeros(height, width, cv.CV_8U);
+    
+    // Manually create binary map
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const pixelVal = probMap[y * width + x] > binThresh ? 255 : 0;
+            matBitmap.ucharPtr(y, x)[0] = pixelVal;
+        }
+    }
 
-    // Convert to 2D array for processing
-    const bitmap = new Array(height).fill(null).map((_, y) => 
-        binaryMap.slice(y * width, (y + 1) * width)
-    );
-
-    // Find contours using OpenCV.js methods
-    const matBitmap = cv.matFromArray(height, width, cv.CV_8U, bitmap.flat());
     const contours = new cv.MatVector();
     const hierarchy = new cv.Mat();
     
@@ -215,7 +217,7 @@ function preprocessImageForRecognition(crops) {
         // Create a bounding rectangle
         const rect = cv.boundingRect(contour);
         
-        // Convert to points format for scoring
+        // Create points for the rectangle
         const points = [
             [rect.x, rect.y],
             [rect.x, rect.y + rect.height],
@@ -223,7 +225,7 @@ function preprocessImageForRecognition(crops) {
             [rect.x + rect.width, rect.y]
         ];
 
-        // Compute box score similar to Python implementation
+        // Compute box score
         const mask = new cv.Mat.zeros(height, width, cv.CV_8U);
         const contourPoints = cv.matFromArray(4, 1, cv.CV_32S, points.flat());
         cv.fillPoly(mask, [contourPoints], new cv.Scalar(255));
@@ -251,6 +253,7 @@ function preprocessImageForRecognition(crops) {
         contour.delete();
         mask.delete();
         contourPoints.delete();
+        maskedPred.delete();
     }
 
     // Clean up additional OpenCV objects
@@ -259,7 +262,7 @@ function preprocessImageForRecognition(crops) {
     hierarchy.delete();
 
     return boxes;
-  }
+}            
 
         
     function computeBoxScore(pred, points) {
