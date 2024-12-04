@@ -472,6 +472,7 @@ function resetUI() {
     apiResponseElement.textContent = '';
     imageDataUrl = '';
     extractedText = '';
+    loadingMessageElement.textContent = '';
     clearCanvas();
     previewCanvas.style.display = 'none';
     confirmButton.style.display = 'none';
