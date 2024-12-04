@@ -143,7 +143,13 @@ async function detectAndRecognizeText(imageElement) {
         input: detectionTensor
     };
 
+    console.log('detectionFeed --->' , detectionFeed)
+
     const detectionResults = await detectionModel.run(detectionFeed);
+    
+    console.log('detectionResults:' , detectionResults)
+    console.log('detectionResults.ouput --->' , detectionResults.output)
+    
     const detectionOutput = detectionResults.output.data;
 
     // Threshold and binarize using sigmoid
