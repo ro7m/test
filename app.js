@@ -62,7 +62,7 @@ async function loadModels() {
     
     try {
         detectionModel = await ort.InferenceSession.create('models/rep_fast_base.onnx', {
-            executionProviders: ['webgl', 'wasm'] // Add multiple providers for better performance
+            executionProviders: ['webgl', 'wasm']
         });
         recognitionModel = await ort.InferenceSession.create('models/parseq_dynamic.onnx', {
             executionProviders: ['webgl', 'wasm']
