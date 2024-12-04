@@ -19,6 +19,12 @@ body {
     margin-bottom: 20px;
 }
 
+.loading-message{
+    text-align: center;
+    color: #666;
+    margin: 10px 0;
+}
+
 button {
     padding: 10px 20px;
     margin-right: 10px;
