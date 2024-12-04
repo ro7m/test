@@ -360,12 +360,6 @@ function preprocessImageForRecognition(crops) {
 
         return validBoxes;
     }, []);
-
-    // Merge nearby boxes to reduce fragmentation
-    const mergedBoxes = mergeNearbyBoxes(boxes);
-
-    return mergedBoxes;
-}
     
 function decodeText(logits, vocab) {
     const sequences = [];
