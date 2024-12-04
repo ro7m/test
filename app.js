@@ -61,12 +61,8 @@ async function loadModels() {
     performanceTracker.start('Model Loading');
     
     try {
-        detectionModel = await ort.InferenceSession.create('models/rep_fast_base.onnx', {
-            executionProviders: ['webgl', 'wasm']
-        });
-        recognitionModel = await ort.InferenceSession.create('models/parseq_dynamic.onnx', {
-            executionProviders: ['webgl', 'wasm']
-        });
+        detectionModel = await ort.InferenceSession.create('models/rep_fast_base.onnx');
+        recognitionModel = await ort.InferenceSession.create('models/parseq_dynamic.onnx');
         
         const modelLoadTime = performanceTracker.end('Model Loading');
         console.log(`Models loaded successfully in ${modelLoadTime.toFixed(2)}ms`);
