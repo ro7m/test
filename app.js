@@ -325,7 +325,7 @@ function preprocessImageForRecognition(crops) {
         return mergedBoxes;
     }
 
-    const contours = findContours(bitmap);
+    const contours = cv.findContours(bitmap);
     const boxes = contours.reduce((validBoxes, contour) => {
         // Filter out very small contours
         if (contour.length < 10) return validBoxes;
