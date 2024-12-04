@@ -26,8 +26,8 @@ let recognitionModel;
 
 async function loadModels() {
     try {
-        detectionModel = await ort.InferenceSession.create('models/fast_base.onnx');
-        recognitionModel = await ort.InferenceSession.create('models/parseq.onnx');
+        detectionModel = await ort.InferenceSession.create('models/rep_fast_base.onnx');
+        recognitionModel = await ort.InferenceSession.create('models/parseq_dynamic.onnx');
         console.log('Models loaded successfully');
     } catch (error) {
         console.error('Error loading models:', error);
