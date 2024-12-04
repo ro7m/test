@@ -325,41 +325,41 @@ function preprocessImageForRecognition(crops) {
         return mergedBoxes;
     }
 
-    const contours = cv.findContours(bitmap);
-    const boxes = contours.reduce((validBoxes, contour) => {
-        // Filter out very small contours
-        if (contour.length < 10) return validBoxes;
+    // const contours = cv.findContours(bitmap);
+    // const boxes = contours.reduce((validBoxes, contour) => {
+    //     // Filter out very small contours
+    //     if (contour.length < 10) return validBoxes;
 
-        // Compute bounding box and score
-        const xs = contour.map(p => p[0]);
-        const ys = contour.map(p => p[1]);
-        const x1 = Math.min(...xs);
-        const y1 = Math.min(...ys);
-        const x2 = Math.max(...xs);
-        const y2 = Math.max(...ys);
+    //     // Compute bounding box and score
+    //     const xs = contour.map(p => p[0]);
+    //     const ys = contour.map(p => p[1]);
+    //     const x1 = Math.min(...xs);
+    //     const y1 = Math.min(...ys);
+    //     const x2 = Math.max(...xs);
+    //     const y2 = Math.max(...ys);
 
-        // Compute box score
-        const { meanScore, variance } = computeBoxScore(probMap, contour);
+    //     // Compute box score
+    //     const { meanScore, variance } = computeBoxScore(probMap, contour);
         
-        // More strict filtering
-        if (meanScore < boxThresh || variance > 0.5) return validBoxes;
+    //     // More strict filtering
+    //     if (meanScore < boxThresh || variance > 0.5) return validBoxes;
 
-        // Aspect ratio filtering to remove unlikely text regions
-        const width = x2 - x1;
-        const height = y2 - y1;
-        const aspectRatio = width / height;
-        if (aspectRatio < 0.1 || aspectRatio > 10) return validBoxes;
+    //     // Aspect ratio filtering to remove unlikely text regions
+    //     const width = x2 - x1;
+    //     const height = y2 - y1;
+    //     const aspectRatio = width / height;
+    //     if (aspectRatio < 0.1 || aspectRatio > 10) return validBoxes;
 
-        // Scale to original image dimensions
-        validBoxes.push([
-            x1 * scaleX,
-            y1 * scaleY,
-            x2 * scaleX,
-            y2 * scaleY
-        ]);
+    //     // Scale to original image dimensions
+    //     validBoxes.push([
+    //         x1 * scaleX,
+    //         y1 * scaleY,
+    //         x2 * scaleX,
+    //         y2 * scaleY
+    //     ]);
 
-        return validBoxes;
-    }, []);
+    //     return validBoxes;
+    // }, []);
     
 function decodeText(logits, vocab) {
     const sequences = [];
