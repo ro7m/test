@@ -201,14 +201,20 @@ function extractBoundingBoxes(probMap, imageElement) {
     );
 
     function findContours(bitmap) {
-        // This is a simplified version. In a real-world scenario, 
-        // you'd use OpenCV.js for more accurate contour detection
-        const contours = [];
-        const visited = new Array(height).fill(null).map(() => new Array(width).fill(false));
+    const height = bitmap.length;
+    const width = bitmap[0].length;
+    const contours = [];
+    const visited = new Array(height).fill(null).map(() => new Array(width).fill(false));
 
-        function floodFill(x, y, contour) {
+    function floodFill(startX, startY) {
+        const contour = [];
+        const stack = [[startX, startY]];
+
+        while (stack.length > 0) {
+            const [x, y] = stack.pop();
+
             if (x < 0 || x >= width || y < 0 || y >= height || 
-                visited[y][x] || bitmap[y][x] === 0) return;
+                visited[y][x] || bitmap[y][x] === 0) continue;
 
             visited[y][x] = true;
             contour.push([x, y]);
@@ -219,22 +225,29 @@ function extractBoundingBoxes(probMap, imageElement) {
                 [1,1], [1,-1], [-1,1], [-1,-1]
             ];
             for (const [dx, dy] of directions) {
-                floodFill(x + dx, y + dy, contour);
-            }
-        }
-
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                if (!visited[y][x] && bitmap[y][x] !== 0) {
-                    const contour = [];
-                    floodFill(x, y, contour);
-                    if (contour.length > 0) contours.push(contour);
+                const newX = x + dx;
+                const newY = y + dy;
+                if (newX >= 0 && newX < width && newY >= 0 && newY < height && 
+                    !visited[newY][newX] && bitmap[newY][newX] !== 0) {
+                    stack.push([newX, newY]);
                 }
             }
         }
 
-        return contours;
+        return contour;
     }
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (!visited[y][x] && bitmap[y][x] !== 0) {
+                const contour = floodFill(x, y);
+                if (contour.length > 0) contours.push(contour);
+            }
+        }
+    }
+
+    return contours;
+}
 
     function computeBoxScore(pred, points) {
         // Simplified box score computation
