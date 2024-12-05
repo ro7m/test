@@ -327,43 +327,50 @@ async function detectAndRecognizeText(imageElement) {
             }
         });
     }
+
     const batchSize = 32;
     let fullText = '';
     
     for (let i = 0; i < crops.length; i += batchSize) {
-            const batch = crops.slice(i, i + batchSize);
-            
-           const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
-           console.log("Input Tensor:", inputTensor);
-           //console.log("Input Tensor Shape:", inputTensor.shape);
+        const batch = crops.slice(i, i + batchSize);
+        const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
 
-            const recognitionResults = await recognitionModel.run( { input: inputTensor });
-            
-            const logits = Object.values(recognitionResults)[0].data;
+        const recognitionResults = await recognitionModel.run({ input: inputTensor });
+        const logits = Object.values(recognitionResults)[0].data;
+        const vocabLength = VOCAB.length;
 
-            const vocabLength = VOCAB.length;
-            
-            const batchTexts = [];
-            for (let j = 0; j < batch.length; j++) {
-                const sequenceLogits = logits.slice(
-                    j * vocabLength, 
-                    (j + 1) * vocabLength
-                );
-                const extractedWord = sequenceLogits
-                    .map((_, index) => VOCAB[sequenceLogits.indexOf(Math.max(...sequenceLogits))])
-                    .join('').trim();
-                
-                batchTexts.push(extractedWord);
+        const batchTexts = [];
+        for (let j = 0; j < batch.length; j++) {
+            // Reshape logits for the current sequence
+            const sequenceLogits = logits.slice(
+                j * vocabLength, 
+                (j + 1) * vocabLength
+            );
 
-                    extractedData.push({
-                    word: extractedWord,
-                    boundingBox: batch[j].bbox
-                });
+            // Find indices of max probabilities
+            const maxIndices = sequenceLogits
+                .map((val, idx) => ({ val, idx }))
+                .sort((a, b) => b.val - a.val)
+                .map(item => item.idx);
 
-            }
-            
-            fullText += batchTexts.join(' ') + ' ';
-        }          
+            // Convert indices to characters, stopping at first repeated character
+            const extractedWord = maxIndices
+                .map(idx => VOCAB[idx])
+                .filter((char, index, self) => 
+                    self.indexOf(char) === index
+                )
+                .join('').trim();
+
+            batchTexts.push(extractedWord);
+
+            extractedData.push({
+                word: extractedWord,
+                boundingBox: batch[j].bbox
+            });
+        }
+        
+        fullText += batchTexts.join(' ') + ' ';
+    }          
 
     return extractedData;
 }
