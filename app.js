@@ -328,6 +328,8 @@ async function detectAndRecognizeText(imageElement) {
         });
     }
     const batchSize = 32;
+    let fullText = '';
+    
     for (let i = 0; i < crops.length; i += batchSize) {
             const batch = crops.slice(i, i + batchSize);
             
@@ -339,24 +341,30 @@ async function detectAndRecognizeText(imageElement) {
             
             const logits = Object.values(recognitionResults)[0].data;
 
-            const probabilities = tf.softmax(logits, -1);
-        
-             const bestPath = tf.unstack(tf.argMax(probabilities, -1), 0);
-        
-            const words = decodeText(bestPath);
+            const vocabLength = VOCAB.length;
+            
+            const batchTexts = [];
+            for (let j = 0; j < batch.length; j++) {
+                const sequenceLogits = logits.slice(
+                    j * vocabLength, 
+                    (j + 1) * vocabLength
+                );
+                const extractedWord = sequenceLogits
+                    .map((_, index) => VOCAB[sequenceLogits.indexOf(Math.max(...sequenceLogits))])
+                    .join('').trim();
+                
+                batchTexts.push(extractedWord);
 
-          // Associate each word with its bounding box
-           words.split(' ').forEach((word, index) => {
-            if (word && batch[index]) {
-                extractedData.push({
-                    word: word,
+                    extractedData.push({
+                    word: extractedWord,
                     boundingBox: batch[index].bbox
                 });
-            }
-        });
 
-       }
-    
+            }
+            
+            fullText += batchTexts.join(' ') + ' ';
+        }          
+
     return extractedData;
 }
 
