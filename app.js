@@ -310,6 +310,9 @@ async function detectAndRecognizeText(imageElement) {
             const batch = crops.slice(i, i + batchSize);
             
             const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
+           console.log("Input Tensor:", inputTensor);
+           console.log("Input Tensor Shape:", inputTensor.shape);
+
 
             const recognitionResults = await recognitionModel.run( { input: inputTensor });
             
