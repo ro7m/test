@@ -173,7 +173,7 @@ async function getHeatMapFromImage(imageObject) {
     };
 
     const results = await detectionModel.run(feeds);
-    const heatmapData = results.output.data;
+    const heatmapData = results.logits;
 
     const heatmapCanvas = document.createElement('canvas');
     heatmapCanvas.width = TARGET_SIZE[0];
