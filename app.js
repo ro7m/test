@@ -174,7 +174,7 @@ async function detectText(imageObject, returnModelOutput = false) {
 
     const logits = await detectionModel.run(feeds);
     const logitsData = logits.logits.data; // Adjust based on actual model output
-    const probMap = logitsData.map(val => 1 / (1 + Math.exp(-val)));
+    const probMap = Array.from(logitsData).map(val => 1 / (1 + Math.exp(-val)));
 
     const out = {};
 
@@ -190,7 +190,7 @@ async function detectText(imageObject, returnModelOutput = false) {
 
 function postprocessProbabilityMap(probMap) {
     // Implement thresholding or other post-processing 
-    const threshold = 0.5; // Adjust based on your specific requirements
+    const threshold = 0.1; // Adjust based on your specific requirements
     return probMap.map(prob => prob > threshold ? 1 : 0);
 }
 
