@@ -308,7 +308,7 @@ async function detectAndRecognizeText(imageElement) {
     const batchSize = 32;
     for (let i = 0; i < crops.length; i += batchSize) {
             const batch = crops.slice(i, i + batchSize);
-            const inputTensor = preprocessImageForRecognition(batch);
+            const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
 
             const recognitionResults = await recognitionModel.run({ input: inputTensor });
             
