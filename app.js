@@ -47,7 +47,7 @@ async function loadONNXModel(modelPath) {
     try {
         const response = await fetch(modelPath);
         const model = await response.arrayBuffer();
-        return await ort.InferenceSession.create(model, { executionProviders: ['webgl'] });
+        return await ort.InferenceSession.create(model);
     } catch (error) {
         console.error('Error loading ONNX model:', error);
         showLoading('Error loading models. Please refresh the page.');
@@ -84,8 +84,8 @@ async function setupCamera() {
         const constraints = {
             video: {
                 facingMode: 'environment',
-                width: { ideal: 512 },
-                height: { ideal: 512 },
+                width: { ideal: 1024 },
+                height: { ideal: 1024 },
                 focusMode: 'continuous',
                 advanced: [{
                     focusMode: 'continuous'
