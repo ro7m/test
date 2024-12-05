@@ -247,7 +247,7 @@ function decodeText(bestPath) {
     let lastChar = null;
 
     for (const sequence of bestPath) {
-        const values = sequence.dataSync();
+        const values = sequence.data;
         for (const k of values) {
             if (k !== blank && k !== lastChar) {         
                 collapsed += VOCAB[k];
