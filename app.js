@@ -357,7 +357,7 @@ async function detectAndRecognizeText(imageElement) {
 
                     extractedData.push({
                     word: extractedWord,
-                    boundingBox: batch[index].bbox
+                    boundingBox: batch[j].bbox
                 });
 
             }
