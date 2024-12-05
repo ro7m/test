@@ -319,7 +319,7 @@ async function detectAndRecognizeText(imageElement) {
             return results.logits.data;
         }));
 
-        recognitionResults.forEach((result, index) => {
+        Array.from(recognitionResults).forEach((result, index) => {
             const bestPath = Array.from(result);
             const word = decodeText([new ort.Tensor('float32', bestPath)]);
 
