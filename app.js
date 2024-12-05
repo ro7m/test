@@ -315,8 +315,14 @@ async function detectAndRecognizeText(imageElement) {
             
             const logits = Object.values(recognitionResults)[0].data;
 
-        // Associate each word with its bounding box
-        words.split(' ').forEach((word, index) => {
+            const probabilities = tf.softmax(logits, -1);
+        
+             const bestPath = tf.unstack(tf.argMax(probabilities, -1), 0);
+        
+            const words = decodeText(bestPath);
+
+          // Associate each word with its bounding box
+           words.split(' ').forEach((word, index) => {
             if (word && batch[index]) {
                 extractedData.push({
                     word: word,
@@ -325,27 +331,29 @@ async function detectAndRecognizeText(imageElement) {
             }
         });
 
-        
-            const vocabLength = VOCAB.length;
-            
-            const batchTexts = [];
-            for (let j = 0; j < batch.length; j++) {
-                const sequenceLogits = logits.slice(
-                    j * vocabLength, 
-                    (j + 1) * vocabLength
-                );
-                const extractedWord = sequenceLogits
-                    .map((_, index) => VOCAB[sequenceLogits.indexOf(Math.max(...sequenceLogits))])
-                    .join('').trim();
-                
-                batchTexts.push(extractedWord);
-            }
-            
-            fullText += batchTexts.join(' ') + ' ';
-        }
-        
-        return fullText.trim();
+       }
+    
+    return extractedData;
+}
 
+function decodeText(bestPath) {
+    const blank = 126;
+    let collapsed = "";
+    let lastChar = null;
+
+    for (const sequence of bestPath) {
+        const values = sequence.dataSync();
+        for (const k of values) {
+            if (k !== blank && k !== lastChar) {         
+                collapsed += VOCAB[k];
+                lastChar = k;
+            } else if (k === blank) {
+                lastChar = null;
+            }
+        }
+        collapsed += ' ';
+    }
+    return collapsed.trim();
 }
 
 function clamp(number, size) {
