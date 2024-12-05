@@ -166,35 +166,48 @@ function preprocessImageForDetection(imageElement) {
     return preprocessedData;
 }
 
-async function getHeatMapFromImage(imageObject) {
+async function detectText(imageObject, returnModelOutput = false) {
     const inputTensor = preprocessImageForDetection(imageObject);
     const feeds = {
         input: new ort.Tensor('float32', inputTensor, [1, 3, TARGET_SIZE[0], TARGET_SIZE[1]])
     };
 
-    const results = await detectionModel.run(feeds);
-    const heatmapData = results.logits;
+    const logits = await detectionModel.run(feeds);
+    const logitsData = logits.output.data; // Adjust based on actual model output
+    const probMap = logitsData.map(val => 1 / (1 + Math.exp(-val)));
 
+    const out = {};
+
+    if (returnModelOutput) {
+        out.out_map = probMap;
+    }
+
+    // Post-processing step (equivalent to self.postprocessor)
+    out.preds = postprocessProbabilityMap(probMap);
+
+    return out;
+}
+
+function postprocessProbabilityMap(probMap) {
+    // Implement thresholding or other post-processing 
+    const threshold = 0.5; // Adjust based on your specific requirements
+    return probMap.map(prob => prob > threshold ? 1 : 0);
+}
+
+function createHeatmapFromProbMap(probMap) {
     const heatmapCanvas = document.createElement('canvas');
     heatmapCanvas.width = TARGET_SIZE[0];
     heatmapCanvas.height = TARGET_SIZE[1];
     const ctx = heatmapCanvas.getContext('2d');
     const imageData = ctx.createImageData(TARGET_SIZE[0], TARGET_SIZE[1]);
     
-    // Normalize heatmap data
-    const maxValue = Math.max(...heatmapData);
-    const minValue = Math.min(...heatmapData);
-    
-    for (let i = 0; i < heatmapData.length; i++) {
-        // Normalize and enhance contrast
-        const normalizedValue = (heatmapData[i] - minValue) / (maxValue - minValue);
-        const thresholdedValue = normalizedValue > 0.5 ? 255 : 0;  // Binary thresholding
-        
-        imageData.data[i * 4] = thresholdedValue;     // R
-        imageData.data[i * 4 + 1] = thresholdedValue; // G
-        imageData.data[i * 4 + 2] = thresholdedValue; // B
-        imageData.data[i * 4 + 3] = 255;              // A
-    }
+    probMap.forEach((prob, i) => {
+        const pixelValue = Math.round(prob * 255);
+        imageData.data[i * 4] = pixelValue;     // R
+        imageData.data[i * 4 + 1] = pixelValue; // G
+        imageData.data[i * 4 + 2] = pixelValue; // B
+        imageData.data[i * 4 + 3] = 255;        // A
+    });
     
     ctx.putImageData(imageData, 0, 0);
     return heatmapCanvas;
@@ -249,8 +262,12 @@ function decodeText(bestPath) {
 }
 
 async function detectAndRecognizeText(imageElement) {
-    const heatmapCanvas = await getHeatMapFromImage(imageElement);
-    const boundingBoxes = extractBoundingBoxesFromHeatmap(heatmapCanvas, TARGET_SIZE);
+   
+   const detectionResult = await detectText(imageElement, true);
+        
+   const heatmapCanvas = createHeatmapFromProbMap(detectionResult.out_map);
+        
+   const boundingBoxes = extractBoundingBoxesFromHeatmap(heatmapCanvas, TARGET_SIZE);
 
     previewCanvas.width = TARGET_SIZE[0];
     previewCanvas.height = TARGET_SIZE[1];
