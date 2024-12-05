@@ -172,9 +172,9 @@ async function detectText(imageObject, returnModelOutput = false) {
         input: new ort.Tensor('float32', inputTensor, [1, 3, TARGET_SIZE[0], TARGET_SIZE[1]])
     };
 
-    const logits = await detectionModel.run(feeds);
-    const logitsData = logits.logits.data; // Adjust based on actual model output
-    const probMap = Array.from(logitsData).map(val => 1 / (1 + Math.exp(-val)));
+    const detectionResults = await detectionModel.run(feeds);
+    //const logitsData = logits.logits.data; // Adjust based on actual model output
+    const probMap = Object.values(detectionResults)[0].data.map(val => 1 / (1 + Math.exp(-val)));
 
     const out = {};
 
@@ -362,49 +362,23 @@ function transformBoundingBox(contour, id, size) {
 function extractBoundingBoxesFromHeatmap(heatmapCanvas, size) {
     let src = cv.imread(heatmapCanvas);
     cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
-    
-    // Apply adaptive thresholding for better text region detection
-    cv.adaptiveThreshold(src, src, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
-    
-    // Morphological operations to clean up and connect text regions
-    let kernel = cv.Mat.ones(3, 3, cv.CV_8U);
-    cv.morphologyEx(src, src, cv.MORPH_CLOSE, kernel);
-    cv.morphologyEx(src, src, cv.MORPH_OPEN, kernel);
-    
-    // Find contours with more robust filtering
+    cv.threshold(src, src, 77, 255, cv.THRESH_BINARY);
+    cv.morphologyEx(src, src, cv.MORPH_OPEN, cv.Mat.ones(2, 2, cv.CV_8U));
     let contours = new cv.MatVector();
     let hierarchy = new cv.Mat();
     cv.findContours(src, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
     
     const boundingBoxes = [];
-    const minArea = 50;  // Minimum contour area to consider
-    const maxArea = size[0] * size[1] * 0.3;  // Maximum area (30% of image)
-    
     for (let i = 0; i < contours.size(); ++i) {
-        const contour = contours.get(i);
-        const area = cv.contourArea(contour);
-        
-        // Filter contours based on area and aspect ratio
-        if (area > minArea && area < maxArea) {
-            const contourBoundingBox = cv.boundingRect(contour);
-            const aspectRatio = contourBoundingBox.width / contourBoundingBox.height;
-            
-            // Only add contours with a reasonable aspect ratio (not too wide or tall)
-            if (aspectRatio > 0.1 && aspectRatio < 10) {
-                boundingBoxes.push(transformBoundingBox(contourBoundingBox, i, size));
-            }
+        const contourBoundingBox = cv.boundingRect(contours.get(i));
+        if (contourBoundingBox.width > 2 && contourBoundingBox.height > 2) {
+            boundingBoxes.unshift(transformBoundingBox(contourBoundingBox, i, size));
         }
-        
-        // Clean up to avoid memory leaks
-        contour.delete();
     }
     
-    // Clean up OpenCV resources
     src.delete();
     contours.delete();
     hierarchy.delete();
-    kernel.delete();
-    
     return boundingBoxes;
     }
 
