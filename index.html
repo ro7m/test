@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -8,7 +9,9 @@
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 </head>
 <body>
-    <div class="app-container">
+
+    <div id="appContainer" class="app-container">
+        <button id="install-btn" style="display: none;">Install App</button>
         <video id="video" autoplay playsinline></video>
         <canvas id="canvas" style="display: none;"></canvas>
         <canvas id="previewCanvas" style="display: none;"></canvas>
@@ -21,10 +24,9 @@
                 <button id="discardButton">Discard</button>
             </div>
         </div>
-        <div id="loadingMessage" class="loading-message"></div>
+        <div id="loadingIndicator" style="display: none;"></div>
         <div id="result" class="result"></div>
         <div id="apiResponse" class="api-response"></div>
-        
     </div>
     <script src="app.js"></script>
 </body>
