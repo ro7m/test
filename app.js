@@ -306,7 +306,7 @@ async function detectAndRecognizeText(imageElement) {
         });
     }
 
-    const batchSize = 32;
+   /* const batchSize = 32;
     for (let i = 0; i < crops.length; i += batchSize) {
         const batch = crops.slice(i, i + batchSize);
         const preprocessedCrops = preprocessImageForRecognition(batch.map(crop => crop.canvas));
@@ -331,7 +331,7 @@ async function detectAndRecognizeText(imageElement) {
             }
         });
     }
-    
+    */
     return extractedData;
 }
 
