@@ -182,14 +182,12 @@ async function detectText(imageObject, returnModelOutput = false) {
         out.out_map = probMap;
     }
 
-    // Post-processing step (equivalent to self.postprocessor)
     out.preds = postprocessProbabilityMap(probMap);
 
     return out;
 }
 
 function postprocessProbabilityMap(probMap) {
-    // Implement thresholding or other post-processing 
     const threshold = 0.1; // Adjust based on your specific requirements
     return probMap.map(prob => prob > threshold ? 1 : 0);
 }
@@ -309,7 +307,7 @@ async function detectAndRecognizeText(imageElement) {
     }
 
     const batchSize = 32;
-    /*for (let i = 0; i < crops.length; i += batchSize) {
+    for (let i = 0; i < crops.length; i += batchSize) {
         const batch = crops.slice(i, i + batchSize);
         const preprocessedCrops = preprocessImageForRecognition(batch.map(crop => crop.canvas));
 
@@ -332,7 +330,7 @@ async function detectAndRecognizeText(imageElement) {
                 });
             }
         });
-    }*/
+    }
     
     return extractedData;
 }
