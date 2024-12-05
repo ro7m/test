@@ -318,7 +318,7 @@ async function detectAndRecognizeText(imageElement) {
                 input: new ort.Tensor('float32', cropData, [1, 3, 32, 128])
             };
             const results = await recognitionModel.run(feeds);
-            return results.output;
+            return results.logits.data;
         }));
 
         recognitionResults.forEach((result, index) => {
