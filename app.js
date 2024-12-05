@@ -305,34 +305,34 @@ async function detectAndRecognizeText(imageElement) {
             }
         });
     }
-
     const batchSize = 32;
     for (let i = 0; i < crops.length; i += batchSize) {
-        const batch = crops.slice(i, i + batchSize);
-        const preprocessedCrops = preprocessImageForRecognition(batch.map(crop => crop.canvas));
+            const batch = crops.slice(i, i + batchSize);
+            const inputTensor = preprocessImageForRecognition(batch);
 
-        const recognitionResults = await Promise.all(preprocessedCrops.map(async (cropData) => {
-            const feeds = {
-                input: new ort.Tensor('float32', cropData, [1, 3, 32, 128])
-            };
-            const results = await recognitionModel.run(feeds);
-            return Object.values(results)[0].data;
-        }));
-
-            recognitionResults.forEach((result, index) => {
-            const bestPath = Array.from(result);
-            const word = decodeText([new ort.Tensor('float32', bestPath)]);
-
-            if (word && batch[index]) {
-                extractedData.push({
-                    word: word,
-                    boundingBox: batch[index].bbox
-                });
+            const recognitionResults = await recognitionModel.run({ input: inputTensor });
+            
+            const logits = Object.values(recognitionResults)[0].data;
+            const vocabLength = VOCAB.length;
+            
+            const batchTexts = [];
+            for (let j = 0; j < batch.length; j++) {
+                const sequenceLogits = logits.slice(
+                    j * vocabLength, 
+                    (j + 1) * vocabLength
+                );
+                const extractedWord = sequenceLogits
+                    .map((_, index) => VOCAB[sequenceLogits.indexOf(Math.max(...sequenceLogits))])
+                    .join('').trim();
+                
+                batchTexts.push(extractedWord);
             }
-        });
-    }
-    
-    return extractedData;
+            
+            fullText += batchTexts.join(' ') + ' ';
+        }
+        
+        return fullText.trim();
+
 }
 
 function clamp(number, size) {
