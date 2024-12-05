@@ -173,7 +173,7 @@ async function detectText(imageObject, returnModelOutput = false) {
     };
 
     const logits = await detectionModel.run(feeds);
-    const logitsData = logits.output.data; // Adjust based on actual model output
+    const logitsData = logits.logits.data; // Adjust based on actual model output
     const probMap = logitsData.map(val => 1 / (1 + Math.exp(-val)));
 
     const out = {};
