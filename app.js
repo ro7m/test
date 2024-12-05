@@ -212,31 +212,53 @@ function createHeatmapFromProbMap(probMap) {
 }
 
 function preprocessImageForRecognition(crops) {
-    const targetSize = [32, 128];
-    const preprocessedCrops = [];
-
-    for (const crop of crops) {
+    const processedCrops = crops.map(crop => {
         const canvas = document.createElement('canvas');
-        canvas.width = targetSize[1];
-        canvas.height = targetSize[0];
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(crop, 0, 0, targetSize[1], targetSize[0]);
-
-        const imageData = ctx.getImageData(0, 0, targetSize[1], targetSize[0]);
+        canvas.width = 128;
+        canvas.height = 32;
+        
+        // Resize maintaining aspect ratio
+        const scale = Math.min(128 / crop.width, 32 / crop.height);
+        const scaledWidth = crop.width * scale;
+        const scaledHeight = crop.height * scale;
+        const offsetX = (128 - scaledWidth) / 2;
+        const offsetY = (32 - scaledHeight) / 2;
+        
+        ctx.drawImage(crop, offsetX, offsetY, scaledWidth, scaledHeight);
+        
+        const imageData = ctx.getImageData(0, 0, 128, 32);
         const data = imageData.data;
-        const preprocessedData = new Float32Array(targetSize[0] * targetSize[1] * 3);
-
-        for (let i = 0; i < data.length; i += 4) {
-            const idx = i / 4;
-            preprocessedData[idx] = (data[i] / 255 - REC_MEAN[0]) / REC_STD[0];       // R
-            preprocessedData[idx + targetSize[0] * targetSize[1]] = (data[i + 1] / 255 - REC_MEAN[1]) / REC_STD[1];  // G
-            preprocessedData[idx + targetSize[0] * targetSize[1] * 2] = (data[i + 2] / 255 - REC_MEAN[2]) / REC_STD[2];  // B
+        const tensor = new Float32Array(3 * 32 * 128);
+        
+        for (let i = 0; i < 32 * 128; i++) {
+            const r = data[i * 4];
+            const g = data[i * 4 + 1];
+            const b = data[i * 4 + 2];
+            
+            tensor[i] = (r / 255 - REC_MEAN[0]) / REC_STD[0];
+            tensor[i + 32 * 128] = (g / 255 - REC_MEAN[1]) / REC_STD[1];
+            tensor[i + 2 * 32 * 128] = (b / 255 - REC_MEAN[2]) / REC_STD[2];
         }
+        
+        return tensor;
+    });
 
-        preprocessedCrops.push(preprocessedData);
-    }
+    const combinedTensor = new Float32Array(
+        processedCrops.length * 3 * 32 * 128
+    );
+    processedCrops.forEach((crop, index) => {
+        combinedTensor.set(
+            crop, 
+            index * (3 * 32 * 128)
+        );
+    });
 
-    return preprocessedCrops;
+    return new ort.Tensor(
+        'float32', 
+        combinedTensor, 
+        [processedCrops.length, 3, 32, 128]
+    );
 }
 
 function decodeText(bestPath) {
@@ -309,10 +331,9 @@ async function detectAndRecognizeText(imageElement) {
     for (let i = 0; i < crops.length; i += batchSize) {
             const batch = crops.slice(i, i + batchSize);
             
-            const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
+           const inputTensor = preprocessImageForRecognition(batch);
            console.log("Input Tensor:", inputTensor);
-           console.log("Input Tensor Shape:", inputTensor.shape);
-
+           //console.log("Input Tensor Shape:", inputTensor.shape);
 
             const recognitionResults = await recognitionModel.run( { input: inputTensor });
             
