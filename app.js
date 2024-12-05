@@ -308,11 +308,24 @@ async function detectAndRecognizeText(imageElement) {
     const batchSize = 32;
     for (let i = 0; i < crops.length; i += batchSize) {
             const batch = crops.slice(i, i + batchSize);
+            
             const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
 
-            const recognitionResults = await recognitionModel.run({ input: inputTensor });
+            const recognitionResults = await recognitionModel.run(inputTensor);
             
             const logits = Object.values(recognitionResults)[0].data;
+
+        // Associate each word with its bounding box
+        words.split(' ').forEach((word, index) => {
+            if (word && batch[index]) {
+                extractedData.push({
+                    word: word,
+                    boundingBox: batch[index].bbox
+                });
+            }
+        });
+
+        
             const vocabLength = VOCAB.length;
             
             const batchTexts = [];
