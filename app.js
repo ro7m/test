@@ -316,10 +316,10 @@ async function detectAndRecognizeText(imageElement) {
                 input: new ort.Tensor('float32', cropData, [1, 3, 32, 128])
             };
             const results = await recognitionModel.run(feeds);
-            return results.logits.data;
+            return Object.values(results)[0].data;
         }));
 
-            Object.values(recognitionResults)[0].data.forEach((result, index) => {
+            recognitionResults.forEach((result, index) => {
             const bestPath = Array.from(result);
             const word = decodeText([new ort.Tensor('float32', bestPath)]);
 
