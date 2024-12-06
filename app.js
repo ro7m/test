@@ -349,6 +349,7 @@ async function detectAndRecognizeText(imageElement) {
                 });
             }
         });
+    }
     
     return extractedData;
 }
