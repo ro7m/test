@@ -1,281 +1,198 @@
-const predictions = await session.run({input: inputTensor});
+function preprocessImageForRecognition(crops, targetSize = [32, 128], mean = [0.694, 0.695, 0.693], std = [0.299, 0.296, 0.301]) {
+    // Helper function to resize and pad image
+    function resizeAndPadImage(imageData) {
+        // Create canvas for resizing
+        const canvas = new OffscreenCanvas(imageData.width, imageData.height);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(imageData, 0, 0);
 
-// Get the output tensor (adjust the output name based on your model)
-const outputTensor = predictions.output; // This is likely a Float32Array
+        const [targetHeight, targetWidth] = targetSize;
+        let resizedWidth, resizedHeight;
+        let aspectRatio = targetWidth / targetHeight;
 
-// Convert to ORT tensor
-const predictionsTensor = new ort.Tensor('float32', outputTensor, predictions.output.dims);
-
-// Perform softmax operation
-function softmax(tensor) {
-    const data = tensor.data;
-    const dims = tensor.dims;
-    
-    // Softmax along the last dimension
-    const result = new Float32Array(data.length);
-    
-    // Handle multi-dimensional tensor
-    const lastDimSize = dims[dims.length - 1];
-    const batchSize = data.length / lastDimSize;
-    
-    for (let i = 0; i < batchSize; i++) {
-        const start = i * lastDimSize;
-        const end = start + lastDimSize;
-        
-        // Compute max for numerical stability
-        const slice = data.slice(start, end);
-        const max = Math.max(...slice);
-        
-        // Compute exponentials
-        const exp = slice.map(x => Math.exp(x - max));
-        
-        // Compute sum of exponentials
-        const sum = exp.reduce((a, b) => a + b, 0);
-        
-        // Normalize
-        for (let j = 0; j < lastDimSize; j++) {
-            result[start + j] = exp[j] / sum;
+        // Calculate resize dimensions maintaining aspect ratio
+        if (aspectRatio * imageData.height > imageData.width) {
+            resizedHeight = targetHeight;
+            resizedWidth = Math.round((targetHeight * imageData.width) / imageData.height);
+        } else {
+            resizedWidth = targetWidth;
+            resizedHeight = Math.round((targetWidth * imageData.height) / imageData.width);
         }
-    }
-    
-    return new ort.Tensor('float32', result, dims);
-}
 
-// Perform argmax operation
-function argMax(tensor, axis = -1) {
-    const data = tensor.data;
-    const dims = tensor.dims;
-    
-    // Determine the size of the axis we're finding max along
-    const lastDimSize = dims[dims.length - 1];
-    const batchSize = data.length / lastDimSize;
-    
-    const result = new Int32Array(batchSize);
-    
-    for (let i = 0; i < batchSize; i++) {
-        const start = i * lastDimSize;
-        const end = start + lastDimSize;
+        // Create resize canvas
+        const resizeCanvas = new OffscreenCanvas(targetWidth, targetHeight);
+        const resizeCtx = resizeCanvas.getContext('2d');
         
-        // Find index of max value in this slice
-        const slice = data.slice(start, end);
-        const maxIndex = slice.indexOf(Math.max(...slice));
+        // Fill with black background
+        resizeCtx.fillStyle = 'black';
+        resizeCtx.fillRect(0, 0, targetWidth, targetHeight);
+
+        // Calculate positioning for resize
+        const xOffset = Math.floor((targetWidth - resizedWidth) / 2);
+        const yOffset = Math.floor((targetHeight - resizedHeight) / 2);
+
+        // Draw resized image
+        resizeCtx.drawImage(
+            canvas, 
+            0, 0, imageData.width, imageData.height, 
+            xOffset, yOffset, resizedWidth, resizedHeight
+        );
+
+        // Get image data
+        const imageDataResized = resizeCtx.getImageData(0, 0, targetWidth, targetHeight);
+        return imageDataResized;
+    }
+
+    // Process each crop
+    const processedImages = crops.map(crop => {
+        // Resize and pad the image
+        const resizedImage = resizeAndPadImage(crop);
         
-        result[i] = maxIndex;
-    }
-    
-    return new ort.Tensor('int32', result, [batchSize]);
-}
-
-// Unstack operation
-function unstack(tensor, axis = 0) {
-    const data = tensor.data;
-    const dims = tensor.dims;
-    
-    // For now, assuming unstacking along the first dimension
-    const unstackedTensors = [];
-    const unstackedDims = dims.slice(1);
-    const elementSize = unstackedDims.reduce((a, b) => a * b, 1);
-    
-    for (let i = 0; i < dims[0]; i++) {
-        const start = i * elementSize;
-        const end = start + elementSize;
-        const sliceData = data.slice(start, end);
-        unstackedTensors.push(new ort.Tensor('int32', sliceData, unstackedDims));
-    }
-    
-    return unstackedTensors;
-}
-
-// Modify the unstack function to be compatible with the decode function
-function unstackForDecode(tensor) {
-    const data = tensor.data;
-    const dims = tensor.dims;
-    
-    // Create a wrapper object that mimics TensorFlow's tensor interface
-    const unstackedTensors = [];
-    
-    // Assuming the tensor is 2D: [batch_size, sequence_length]
-    const sequenceLength = dims[1];
-    
-    for (let i = 0; i < dims[0]; i++) {
-        const sequenceData = data.slice(i * sequenceLength, (i + 1) * sequenceLength);
+        // Allocate a new Float32Array for the entire image (3 channels)
+        const float32Data = new Float32Array(3 * targetSize[0] * targetSize[1]);
         
-        // Create an object that mimics TensorFlow's tensor with dataSync method
-        const tensorLike = {
-            dataSync: () => sequenceData
-        };
-        
-        unstackedTensors.push(tensorLike);
-    }
-    
-    return unstackedTensors;
-}
+        // Normalize and separate channels
+        for (let y = 0; y < targetSize[0]; y++) {
+            for (let x = 0; x < targetSize[1]; x++) {
+                const pixelIndex = (y * targetSize[1] + x) * 4;
+                const channelSize = targetSize[0] * targetSize[1];
+                
+                // Extract RGB and normalize
+                const r = resizedImage.data[pixelIndex] / 255.0;
+                const g = resizedImage.data[pixelIndex + 1] / 255.0;
+                const b = resizedImage.data[pixelIndex + 2] / 255.0;
 
-// Modify the previous workflow
-// Apply softmax to predictions
-const probabilities = softmax(predictionsTensor);
-
-// Get best path (argmax)
-const bestPath = argMax(probabilities, -1);
-
-// Unstack for decoding
-const unstackedBestPath = unstackForDecode(bestPath);
-
-// Now use the existing decode function
-const words = decodeText(unstackedBestPath);
-
-// Apply softmax to predictions
-const probabilities = softmax(predictionsTensor);
-
-// Get best path (argmax)
-const bestPath = argMax(probabilities, -1);
-
-// Unstack the best path
-const unstackedBestPath = unstack(bestPath, 0);
-
-// Decode text using your existing decodeText function
-const words = decodeText(unstackedBestPath[0].data);
-
-
-
-// CTC Best Path Decoding Function
-function ctcBestPath(logits, vocab, blankIndex = 0) {
-    // Softmax function
-    function softmax(arr) {
-        const maxLogit = Math.max(...arr);
-        const exp = arr.map(x => Math.exp(x - maxLogit));
-        const sumExp = exp.reduce((a, b) => a + b, 0);
-        return exp.map(x => x / sumExp);
-    }
-
-    // Remove consecutive duplicates and blank tokens
-    function collapseSequence(sequence, blankIndex) {
-        const collapsed = [];
-        for (let i = 0; i < sequence.length; i++) {
-            if (sequence[i] !== blankIndex && 
-                (collapsed.length === 0 || sequence[i] !== collapsed[collapsed.length - 1])) {
-                collapsed.push(sequence[i]);
+                // Separate channels with normalization
+                float32Data[y * targetSize[1] + x] = (r - mean[0]) / std[0];  // R channel
+                float32Data[channelSize + y * targetSize[1] + x] = (g - mean[1]) / std[1];  // G channel
+                float32Data[2 * channelSize + y * targetSize[1] + x] = (b - mean[2]) / std[2];  // B channel
             }
         }
-        return collapsed;
+
+        return float32Data;
+    });
+
+    // Concatenate multiple processed images
+    if (processedImages.length > 1) {
+        const combinedLength = processedImages[0].length * processedImages.length;
+        const combinedData = new Float32Array(combinedLength);
+        
+        processedImages.forEach((img, index) => {
+            combinedData.set(img, index * img.length);
+        });
+
+        return {
+            data: combinedData,
+            dims: [processedImages.length, 3, targetSize[0], targetSize[1]]
+        };
     }
 
-    // Results storage
-    const results = [];
-
-    // Process each sequence in logits
-    for (let i = 0; i < logits.length; i++) {
-        // Find argmax indices for the sequence
-        const argmaxSequence = logits[i].map(row => row.indexOf(Math.max(...row)));
-
-        // Collapse sequence
-        const collapsedSequence = collapseSequence(argmaxSequence, blankIndex);
-
-        // Decode to characters
-        const word = collapsedSequence.map(idx => vocab[idx]).join('');
-
-        // Calculate confidence (minimum softmax probability)
-        const probs = logits[i].map(softmax);
-        const confidence = Math.min(...probs.map(row => Math.max(...row)));
-
-        results.push({ word, confidence });
-    }
-
-    return results;
+    // Single image case
+    return {
+        data: processedImages[0],
+        dims: [1, 3, targetSize[0], targetSize[1]]
+    };
 }
 
-// Example usage
-function postprocessCRNN(logits, vocab) {
-    // Assuming blank index is the last index of vocab
-    const blankIndex = vocab.length;
-    
-    return ctcBestPath(logits, vocab, blankIndex);
-}
 
-// Export for use in modules or as needed
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { ctcBestPath, postprocessCRNN };
-}
+const imageCrops = [imageData1, imageData2];
+const preprocessedImage = preprocessImageForRecognition(imageCrops);
 
+// Create ONNX Runtime tensor
+const tensor = new ort.Tensor('float32', preprocessedImage.data, preprocessedImage.dims);
 
 
 ----
 
+    async function recognizeText(crops, recognitionModel, vocab) {
+    // Preprocess images
+    const preprocessedImage = preprocessImageForRecognition(
+        crops.map(crop => crop.canvas)
+    );
 
-    function ctcBestPath(logits, vocab, inputShape, blankIndex = 0) {
-    // Softmax function for a single row
-    function softmax(arr) {
-        const maxLogit = Math.max(...arr);
-        const exp = arr.map(x => Math.exp(x - maxLogit));
+    // Create ONNX Runtime tensor
+    const inputTensor = new ort.Tensor('float32', preprocessedImage.data, preprocessedImage.dims);
+
+    // Run inference
+    const feeds = { 'input': inputTensor };
+    const results = await recognitionModel.run(feeds);
+
+    // Get logits (assuming the output is named 'output' or 'logits')
+    const logits = results.logits.data;
+
+    // Softmax implementation
+    function softmax(arr, axis = -1) {
+        // Find max value for numerical stability
+        const maxVal = Math.max(...arr);
+        
+        // Exponentiate and normalize
+        const exp = arr.map(x => Math.exp(x - maxVal));
         const sumExp = exp.reduce((a, b) => a + b, 0);
+        
         return exp.map(x => x / sumExp);
     }
 
-    // Remove consecutive duplicates and blank tokens
-    function collapseSequence(sequence, blankIndex) {
-        const collapsed = [];
-        for (let i = 0; i < sequence.length; i++) {
-            if (sequence[i] !== blankIndex && 
-                (collapsed.length === 0 || sequence[i] !== collapsed[collapsed.length - 1])) {
-                collapsed.push(sequence[i]);
-            }
-        }
-        return collapsed;
-    }
+    // Apply softmax to logits
+    // In ONNX Runtime, we'll need to do this manually across the last axis
+    const probabilities = [];
+    const [batchSize, classes, sequenceLength] = preprocessedImage.dims;
 
-    // Reshape Float32Array to 3D array based on input shape
-    const [batchSize, classes, sequenceLength] = inputShape;
-    const reshapedLogits = [];
-
-    // Reshape the flat logits into 3D array
+    // Softmax for each sequence in the batch
     for (let b = 0; b < batchSize; b++) {
-        const batchLogits = [];
+        const batchProbs = [];
         for (let t = 0; t < sequenceLength; t++) {
-            const rowLogits = [];
+            // Extract logits for this timestep
+            const timestepLogits = [];
             for (let c = 0; c < classes; c++) {
                 const index = b * (classes * sequenceLength) + c * sequenceLength + t;
-                rowLogits.push(logits[index]);
+                timestepLogits.push(logits[index]);
             }
-            batchLogits.push(rowLogits);
+            
+            // Apply softmax to timestep
+            batchProbs.push(softmax(timestepLogits));
         }
-        reshapedLogits.push(batchLogits);
+        probabilities.push(batchProbs);
     }
 
-    // Results storage
-    const results = [];
+    // Find argmax (best path) similar to tf.argMax
+    const bestPath = probabilities.map(batchProb => 
+        batchProb.map(timestep => 
+            timestep.indexOf(Math.max(...timestep))
+        )
+    );
 
-    // Process each sequence in logits
-    for (let i = 0; i < reshapedLogits.length; i++) {
-        // Find argmax indices for the sequence
-        const argmaxSequence = reshapedLogits[i].map(row => 
-            row.indexOf(Math.max(...row))
-        );
+    // Convert best path to text using vocab
+    const decodedTexts = bestPath.map(sequence => 
+        sequence
+            .filter(idx => idx !== vocab.length)  // Remove blank token
+            .map(idx => vocab[idx])
+            .join('')
+    );
 
-        // Collapse sequence
-        const collapsedSequence = collapseSequence(argmaxSequence, blankIndex);
-
-        // Decode to characters
-        const word = collapsedSequence.map(idx => vocab[idx]).join('');
-
-        // Calculate confidence (minimum softmax probability)
-        const probs = reshapedLogits[i].map(softmax);
-        const confidence = Math.min(...probs.map(row => Math.max(...row)));
-
-        results.push({ word, confidence });
-    }
-
-    return results;
+    return {
+        probabilities,
+        bestPath,
+        decodedTexts
+    };
 }
 
 // Example usage
-function postprocessCRNN(logits, vocab, inputShape) {
-    // Assuming blank index is the last index of vocab
-    const blankIndex = vocab.length;
-    
-    return ctcBestPath(logits, vocab, inputShape, blankIndex);
+async function processRecognition(crops, recognitionModel, vocab) {
+    try {
+        const results = await recognizeText(crops, recognitionModel, vocab);
+        console.log('Decoded Texts:', results.decodedTexts);
+        console.log('Best Path Indices:', results.bestPath);
+    } catch (error) {
+        console.error('Recognition error:', error);
+    }
 }
 
-// Export for use in modules or as needed
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { ctcBestPath, postprocessCRNN };
-}
+----
+// Assuming you have:
+// - crops: array of image crops
+// - recognitionModel: ONNX Runtime session
+// - vocab: array of characters/tokens
+const results = await recognizeText(crops, recognitionModel, vocab);
+console.log(results.decodedTexts);
+    
+    
