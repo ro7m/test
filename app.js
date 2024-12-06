@@ -329,7 +329,7 @@ async function detectAndRecognizeText(imageElement) {
         });
     }
 
-       const batchSize = isMobile() ? 32 : 8;
+    const batchSize = 32;
     for (let i = 0; i < crops.length; i += batchSize) {
         const batch = crops.slice(i, i + batchSize);
         const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
@@ -402,7 +402,8 @@ function extractBoundingBoxesFromHeatmap(heatmapCanvas, size) {
     }
 
 
-function softmax(arr) {
+function softmax(iterable) {
+    const arr = Array.isArray(iterable)? iterable : [...iterable];
     if (!arr || arr.length === 0) return [];
 
     // Numerical stability improvement
