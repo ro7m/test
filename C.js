@@ -86,6 +86,44 @@ function unstack(tensor, axis = 0) {
     return unstackedTensors;
 }
 
+// Modify the unstack function to be compatible with the decode function
+function unstackForDecode(tensor) {
+    const data = tensor.data;
+    const dims = tensor.dims;
+    
+    // Create a wrapper object that mimics TensorFlow's tensor interface
+    const unstackedTensors = [];
+    
+    // Assuming the tensor is 2D: [batch_size, sequence_length]
+    const sequenceLength = dims[1];
+    
+    for (let i = 0; i < dims[0]; i++) {
+        const sequenceData = data.slice(i * sequenceLength, (i + 1) * sequenceLength);
+        
+        // Create an object that mimics TensorFlow's tensor with dataSync method
+        const tensorLike = {
+            dataSync: () => sequenceData
+        };
+        
+        unstackedTensors.push(tensorLike);
+    }
+    
+    return unstackedTensors;
+}
+
+// Modify the previous workflow
+// Apply softmax to predictions
+const probabilities = softmax(predictionsTensor);
+
+// Get best path (argmax)
+const bestPath = argMax(probabilities, -1);
+
+// Unstack for decoding
+const unstackedBestPath = unstackForDecode(bestPath);
+
+// Now use the existing decode function
+const words = decodeText(unstackedBestPath);
+
 // Apply softmax to predictions
 const probabilities = softmax(predictionsTensor);
 
