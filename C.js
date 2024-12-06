@@ -1,77 +1,99 @@
-function softmax(input) {
-    // Convert input to an array, handling different types
-    const arr = Array.isArray(input) 
-        ? input 
-        : input && typeof input.data === 'object' 
-            ? Array.from(input.data)  // Handle tensor-like objects
-            : Array.from(input || []);  // Fallback to empty array if null/undefined
+const predictions = await session.run({input: inputTensor});
+
+// Get the output tensor (adjust the output name based on your model)
+const outputTensor = predictions.output; // This is likely a Float32Array
+
+// Convert to ORT tensor
+const predictionsTensor = new ort.Tensor('float32', outputTensor, predictions.output.dims);
+
+// Perform softmax operation
+function softmax(tensor) {
+    const data = tensor.data;
+    const dims = tensor.dims;
     
-    if (!arr || arr.length === 0) return [];
-
-    // Numerical stability improvement
-    const max = Math.max(...arr.map(Number));
-    const exp = arr.map(x => Math.exp(Number(x) - max));
-    const sum = exp.reduce((a, b) => a + b, 0);
+    // Softmax along the last dimension
+    const result = new Float32Array(data.length);
     
-    return exp.map(x => x / sum);
-}
-
-function argmax(arr) {
-    if (!arr || arr.length === 0) return -1;
-
-    return arr.reduce((maxIndex, current, index, arr) => 
-        current > arr[maxIndex] ? index : maxIndex, 0);
-}
-function unstackArgmax(probabilities) {
-    // If probabilities is a Float32Array, assume it's a flattened 2D array
-    // You'll need to provide the original dimensions
+    // Handle multi-dimensional tensor
+    const lastDimSize = dims[dims.length - 1];
+    const batchSize = data.length / lastDimSize;
     
-    // Example implementation assuming a specific shape
-    const numRows = probabilities.length / VOCAB.length;  // Assuming VOCAB is defined
-    const vocabLength = VOCAB.length;
-
-    // Create an array to store the best path indices
-    const bestPath = [];
-
-    // Iterate through each row
-    for (let i = 0; i < numRows; i++) {
-        // Extract the slice for this row
-        const rowStart = i * vocabLength;
-        const rowEnd = rowStart + vocabLength;
-        const rowProbabilities = probabilities.slice(rowStart, rowEnd);
-
-        // Find the index with maximum probability
-        const maxIndex = rowProbabilities.reduce((maxIndex, current, index, arr) => 
-            current > arr[maxIndex] ? index : maxIndex, 0);
-
-        bestPath.push(maxIndex);
+    for (let i = 0; i < batchSize; i++) {
+        const start = i * lastDimSize;
+        const end = start + lastDimSize;
+        
+        // Compute max for numerical stability
+        const slice = data.slice(start, end);
+        const max = Math.max(...slice);
+        
+        // Compute exponentials
+        const exp = slice.map(x => Math.exp(x - max));
+        
+        // Compute sum of exponentials
+        const sum = exp.reduce((a, b) => a + b, 0);
+        
+        // Normalize
+        for (let j = 0; j < lastDimSize; j++) {
+            result[start + j] = exp[j] / sum;
+        }
     }
-
-    return bestPath;
+    
+    return new ort.Tensor('float32', result, dims);
 }
 
-// Usage example
-async function detectAndRecognizeText(imageElement) {
-    const recognitionResults = await recognitionModel.run({ input: inputTensor });
-    const probabilities = Object.values(recognitionResults)[0].data;  // Ensure it's converted to data
+// Perform argmax operation
+function argMax(tensor, axis = -1) {
+    const data = tensor.data;
+    const dims = tensor.dims;
     
-    // You MUST specify the correct number of rows/vocab length
-    const bestPath = unstackArgmax(probabilities);
+    // Determine the size of the axis we're finding max along
+    const lastDimSize = dims[dims.length - 1];
+    const batchSize = data.length / lastDimSize;
     
-    // Convert bestPath indices to characters
-    const extractedTexts = bestPath.map(index => VOCAB[index] || '');
+    const result = new Int32Array(batchSize);
+    
+    for (let i = 0; i < batchSize; i++) {
+        const start = i * lastDimSize;
+        const end = start + lastDimSize;
+        
+        // Find index of max value in this slice
+        const slice = data.slice(start, end);
+        const maxIndex = slice.indexOf(Math.max(...slice));
+        
+        result[i] = maxIndex;
+    }
+    
+    return new ort.Tensor('int32', result, [batchSize]);
 }
 
+// Unstack operation
+function unstack(tensor, axis = 0) {
+    const data = tensor.data;
+    const dims = tensor.dims;
     
-
-// Example usage in your recognition function
-async function detectAndRecognizeText(imageElement) {
-    const recognitionResults = await recognitionModel.run({ input: inputTensor });
-    const probabilities = Object.values(recognitionResults)[0];
+    // For now, assuming unstacking along the first dimension
+    const unstackedTensors = [];
+    const unstackedDims = dims.slice(1);
+    const elementSize = unstackedDims.reduce((a, b) => a * b, 1);
     
-    // Equivalent to TensorFlow's tf.unstack(tf.argmax(probabilities, -1), 0)
-    const bestPath = unstackArgmax(probabilities);
+    for (let i = 0; i < dims[0]; i++) {
+        const start = i * elementSize;
+        const end = start + elementSize;
+        const sliceData = data.slice(start, end);
+        unstackedTensors.push(new ort.Tensor('int32', sliceData, unstackedDims));
+    }
     
-    // Convert bestPath indices to characters
-    const extractedTexts = bestPath.map(index => VOCAB[index] || '');
+    return unstackedTensors;
 }
+
+// Apply softmax to predictions
+const probabilities = softmax(predictionsTensor);
+
+// Get best path (argmax)
+const bestPath = argMax(probabilities, -1);
+
+// Unstack the best path
+const unstackedBestPath = unstack(bestPath, 0);
+
+// Decode text using your existing decodeText function
+const words = decodeText(unstackedBestPath[0].data);
