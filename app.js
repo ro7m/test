@@ -336,20 +336,11 @@ async function detectAndRecognizeText(imageElement) {
         
         const recognitionResult = await recognitionModel.run({input : inputTensor});
         
-        const predictions = Object.values(recognitionResult)[0].data;
+        const logits = Object.values(recognitionResult)[0].data;
 
-        const predictionsTensor = new ort.Tensor('float32', outputTensor, predictions.output.dims);
+        const result = postprocessCRNN(logits,VOCAB);
 
-        const probabilities = softmax(predictionsTensor);
-
-        // Get best path (argmax)
-        const bestPath = argMax(probabilities, -1);
-
-        // Unstack the best path
-        const unstackedBestPath = unstackForDecode(bestPath);
-
-        // Decode text using your existing decodeText function
-        const words = decodeText(unstackedBestPath);
+        console.log("decode text " ,result);
         
         // Associate each word with its bounding box
         words.split(' ').forEach((word, index) => {
@@ -363,6 +354,59 @@ async function detectAndRecognizeText(imageElement) {
     }
     
     return extractedData;
+}
+
+function ctcBestPath(logits, vocab, blankIndex = 0) {
+    // Softmax function
+    function softmax(arr) {
+        const maxLogit = Math.max(...arr);
+        const exp = arr.map(x => Math.exp(x - maxLogit));
+        const sumExp = exp.reduce((a, b) => a + b, 0);
+        return exp.map(x => x / sumExp);
+    }
+
+    // Remove consecutive duplicates and blank tokens
+    function collapseSequence(sequence, blankIndex) {
+        const collapsed = [];
+        for (let i = 0; i < sequence.length; i++) {
+            if (sequence[i] !== blankIndex && 
+                (collapsed.length === 0 || sequence[i] !== collapsed[collapsed.length - 1])) {
+                collapsed.push(sequence[i]);
+            }
+        }
+        return collapsed;
+    }
+
+    // Results storage
+    const results = [];
+
+    // Process each sequence in logits
+    for (let i = 0; i < logits.length; i++) {
+        // Find argmax indices for the sequence
+        const argmaxSequence = logits[i].map(row => row.indexOf(Math.max(...row)));
+
+        // Collapse sequence
+        const collapsedSequence = collapseSequence(argmaxSequence, blankIndex);
+
+        // Decode to characters
+        const word = collapsedSequence.map(idx => vocab[idx]).join('');
+
+        // Calculate confidence (minimum softmax probability)
+        const probs = logits[i].map(softmax);
+        const confidence = Math.min(...probs.map(row => Math.max(...row)));
+
+        results.push({ word, confidence });
+    }
+
+    return results;
+}
+
+// Example usage
+function postprocessCRNN(logits, vocab) {
+    // Assuming blank index is the last index of vocab
+    const blankIndex = vocab.length;
+    
+    return ctcBestPath(logits, vocab, blankIndex);
 }
 
 function clamp(number, size) {
@@ -411,90 +455,6 @@ function extractBoundingBoxesFromHeatmap(heatmapCanvas, size) {
     hierarchy.delete();
     return boundingBoxes;
     }
-
-function softmax(tensor) {
-    const data = tensor.data;
-    const dims = tensor.dims;
-    
-    // Softmax along the last dimension
-    const result = new Float32Array(data.length);
-    
-    // Handle multi-dimensional tensor
-    const lastDimSize = dims[dims.length - 1];
-    const batchSize = data.length / lastDimSize;
-    
-    for (let i = 0; i < batchSize; i++) {
-        const start = i * lastDimSize;
-        const end = start + lastDimSize;
-        
-        // Compute max for numerical stability
-        const slice = data.slice(start, end);
-        const max = Math.max(...slice);
-        
-        // Compute exponentials
-        const exp = slice.map(x => Math.exp(x - max));
-        
-        // Compute sum of exponentials
-        const sum = exp.reduce((a, b) => a + b, 0);
-        
-        // Normalize
-        for (let j = 0; j < lastDimSize; j++) {
-            result[start + j] = exp[j] / sum;
-        }
-    }
-    
-    return new ort.Tensor('float32', result, dims);
-}
-
-// Perform argmax operation
-function argMax(tensor, axis = -1) {
-    const data = tensor.data;
-    const dims = tensor.dims;
-    
-    // Determine the size of the axis we're finding max along
-    const lastDimSize = dims[dims.length - 1];
-    const batchSize = data.length / lastDimSize;
-    
-    const result = new Int32Array(batchSize);
-    
-    for (let i = 0; i < batchSize; i++) {
-        const start = i * lastDimSize;
-        const end = start + lastDimSize;
-        
-        // Find index of max value in this slice
-        const slice = data.slice(start, end);
-        const maxIndex = slice.indexOf(Math.max(...slice));
-        
-        result[i] = maxIndex;
-    }
-    
-    return new ort.Tensor('int32', result, [batchSize]);
-}
-
-// Unstack operation
-function unstackForDecode(tensor) {
-    const data = tensor.data;
-    const dims = tensor.dims;
-    
-    // Create a wrapper object that mimics TensorFlow's tensor interface
-    const unstackedTensors = [];
-    
-    // Assuming the tensor is 2D: [batch_size, sequence_length]
-    const sequenceLength = dims[1];
-    
-    for (let i = 0; i < dims[0]; i++) {
-        const sequenceData = data.slice(i * sequenceLength, (i + 1) * sequenceLength);
-        
-        // Create an object that mimics TensorFlow's tensor with dataSync method
-        const tensorLike = {
-            dataSync: () => sequenceData
-        };
-        
-        unstackedTensors.push(tensorLike);
-    }
-    
-    return unstackedTensors;
-}
 
 
 function getRandomColor() {
