@@ -341,19 +341,26 @@ async function detectAndRecognizeText(imageElement) {
 
         const batchTexts = [];
         for (let j = 0; j < batch.length; j++) {
-            // Reshape logits for the current sequence
+            // Extract sequence logits
             const sequenceLogits = logits.slice(
                 j * vocabLength, 
                 (j + 1) * vocabLength
             );
 
-            // Find indices of max probabilities
-            const maxIndex = sequenceLogits.reduce(
-                (maxIdx, val, idx, arr) => val > arr[maxIdx] ? idx : maxIdx, 
-                0
-            );
+            // Apply softmax
+            const softmaxProbs = softmax(sequenceLogits);
 
-            const extractedWord = VOCAB[maxIndex] || '';
+            // Find indices with argmax
+            const outIdxs = softmaxProbs.map((val, idx) => ({val, idx}))
+                .sort((a, b) => b.val - a.val)
+                .map(x => x.idx);
+
+            // Decode indices to characters
+            const extractedWord = outIdxs
+                .map(idx => VOCAB[idx])
+                .join('')
+                .split('<eos>')[0]  // If EOS token exists
+                .trim();
 
             batchTexts.push(extractedWord);
 
@@ -367,6 +374,13 @@ async function detectAndRecognizeText(imageElement) {
     }          
 
     return extractedData;
+}
+
+function softmax(arr) {
+    const max = Math.max(...arr);
+    const exp = arr.map(x => Math.exp(x - max));
+    const sum = exp.reduce((a, b) => a + b, 0);
+    return exp.map(x => x / sum);
 }
 
 function decodeText(bestPath) {
