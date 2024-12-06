@@ -348,18 +348,12 @@ async function detectAndRecognizeText(imageElement) {
             );
 
             // Find indices of max probabilities
-            const maxIndices = sequenceLogits
-                .map((val, idx) => ({ val, idx }))
-                .sort((a, b) => b.val - a.val)
-                .map(item => item.idx);
+            const maxIndex = sequenceLogits.reduce(
+                (maxIdx, val, idx, arr) => val > arr[maxIdx] ? idx : maxIdx, 
+                0
+            );
 
-            // Convert indices to characters, stopping at first repeated character
-            const extractedWord = maxIndices
-                .map(idx => VOCAB[idx])
-                .filter((char, index, self) => 
-                    self.indexOf(char) === index
-                )
-                .join('').trim();
+            const extractedWord = VOCAB[maxIndex] || '';
 
             batchTexts.push(extractedWord);
 
