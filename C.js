@@ -1,8 +1,16 @@
 function softmax(arr) {
+    // Prevent NaN by handling edge cases
+    if (!arr || arr.length === 0) return [];
+
     const max = Math.max(...arr);
-    const exp = arr.map(x => Math.exp(x - max));
+    const exp = arr.map(x => {
+        // Ensure x is a number
+        const val = Number(x);
+        return isNaN(val) ? 0 : Math.exp(val - max);
+    });
     const sum = exp.reduce((a, b) => a + b, 0);
-    return exp.map(x => x / sum);
+    
+    return exp.map(x => sum > 0 ? x / sum : 0);
 }
 
 async function detectAndRecognizeText(imageElement) {
@@ -25,19 +33,26 @@ async function detectAndRecognizeText(imageElement) {
                 (j + 1) * vocabLength
             );
 
-            // Apply softmax
+            // Debug logging
+            console.log('Sequence Logits:', sequenceLogits);
+            console.log('Sequence Logits Type:', typeof sequenceLogits[0]);
+
+            // Robust softmax application
             const softmaxProbs = softmax(sequenceLogits);
 
-            // Find indices with argmax
-            const outIdxs = softmaxProbs.map((val, idx) => ({val, idx}))
+            // Debug logging
+            console.log('Softmax Probs:', softmaxProbs);
+
+            // Find indices with highest probabilities
+            const outIdxs = softmaxProbs
+                .map((val, idx) => ({val, idx}))
                 .sort((a, b) => b.val - a.val)
                 .map(x => x.idx);
 
             // Decode indices to characters
             const extractedWord = outIdxs
-                .map(idx => VOCAB[idx])
+                .map(idx => VOCAB[idx] || '')
                 .join('')
-                .split('<eos>')[0]  // If EOS token exists
                 .trim();
 
             batchTexts.push(extractedWord);
