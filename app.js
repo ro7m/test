@@ -333,13 +333,24 @@ async function detectAndRecognizeText(imageElement) {
     for (let i = 0; i < crops.length; i += batchSize) {
         const batch = crops.slice(i, i + batchSize);
         const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
-
-        const predictions = await recognitionModel.run({input : inputTensor});
-        const probabilities = softmax(predictions, -1);
-        const bestPath = unstackArgmax(probabilities);
         
-        const words = decodeText(bestPath);
+        const recognitionResult = await recognitionModel.run({input : inputTensor});
+        
+        const predictions = Object.values(recognitionResult)[0].data;
 
+        const predictionsTensor = new ort.Tensor('float32', outputTensor, predictions.output.dims);
+
+        const probabilities = softmax(predictionsTensor);
+
+        // Get best path (argmax)
+        const bestPath = argMax(probabilities, -1);
+
+        // Unstack the best path
+        const unstackedBestPath = unstackForDecode(bestPath);
+
+        // Decode text using your existing decodeText function
+        const words = decodeText(unstackedBestPath);
+        
         // Associate each word with its bounding box
         words.split(' ').forEach((word, index) => {
             if (word && batch[index]) {
@@ -401,59 +412,90 @@ function extractBoundingBoxesFromHeatmap(heatmapCanvas, size) {
     return boundingBoxes;
     }
 
-
-function softmax(input) {
-    // Convert input to an array, handling different types
-    const arr = Array.isArray(input) 
-        ? input 
-        : input && typeof input.data === 'object' 
-            ? Array.from(input.data)  // Handle tensor-like objects
-            : Array.from(input || []);  // Fallback to empty array if null/undefined
+unction softmax(tensor) {
+    const data = tensor.data;
+    const dims = tensor.dims;
     
-    if (!arr || arr.length === 0) return [];
-
-    // Numerical stability improvement
-    const max = Math.max(...arr.map(Number));
-    const exp = arr.map(x => Math.exp(Number(x) - max));
-    const sum = exp.reduce((a, b) => a + b, 0);
+    // Softmax along the last dimension
+    const result = new Float32Array(data.length);
     
-    return exp.map(x => x / sum);
-}
-
-
-function argmax(arr) {
-    if (!arr || arr.length === 0) return -1;
-
-    return arr.reduce((maxIndex, current, index, arr) => 
-        current > arr[maxIndex] ? index : maxIndex, 0);
-}
-
-function unstackArgmax(probabilities, axis = -1) {
-    const shape = probabilities.shape;
-    const rank = shape.length;
+    // Handle multi-dimensional tensor
+    const lastDimSize = dims[dims.length - 1];
+    const batchSize = data.length / lastDimSize;
     
-    // Normalize axis if negative
-    const normalizedAxis = axis < 0 ? rank + axis : axis;
-
-    // Function to perform argmax along a specific axis
-    function argmaxAlongAxis(tensor, axis) {
-        // If axis is the last dimension
-        if (axis === rank - 1) {
-            return tensor.map(row => {
-                return row.reduce((maxIndex, current, index, arr) => 
-                    current > arr[maxIndex] ? index : maxIndex, 0);
-            });
-        }
+    for (let i = 0; i < batchSize; i++) {
+        const start = i * lastDimSize;
+        const end = start + lastDimSize;
         
-        // More complex multi-dimensional argmax would require more elaborate logic
-        throw new Error('Argmax for axes other than the last dimension not implemented');
+        // Compute max for numerical stability
+        const slice = data.slice(start, end);
+        const max = Math.max(...slice);
+        
+        // Compute exponentials
+        const exp = slice.map(x => Math.exp(x - max));
+        
+        // Compute sum of exponentials
+        const sum = exp.reduce((a, b) => a + b, 0);
+        
+        // Normalize
+        for (let j = 0; j < lastDimSize; j++) {
+            result[start + j] = exp[j] / sum;
+        }
     }
-
-    // Perform argmax
-    const bestPath = argmaxAlongAxis(probabilities.data, normalizedAxis);
-
-    return bestPath;
+    
+    return new ort.Tensor('float32', result, dims);
 }
+
+// Perform argmax operation
+function argMax(tensor, axis = -1) {
+    const data = tensor.data;
+    const dims = tensor.dims;
+    
+    // Determine the size of the axis we're finding max along
+    const lastDimSize = dims[dims.length - 1];
+    const batchSize = data.length / lastDimSize;
+    
+    const result = new Int32Array(batchSize);
+    
+    for (let i = 0; i < batchSize; i++) {
+        const start = i * lastDimSize;
+        const end = start + lastDimSize;
+        
+        // Find index of max value in this slice
+        const slice = data.slice(start, end);
+        const maxIndex = slice.indexOf(Math.max(...slice));
+        
+        result[i] = maxIndex;
+    }
+    
+    return new ort.Tensor('int32', result, [batchSize]);
+}
+
+// Unstack operation
+function unstackForDecode(tensor) {
+    const data = tensor.data;
+    const dims = tensor.dims;
+    
+    // Create a wrapper object that mimics TensorFlow's tensor interface
+    const unstackedTensors = [];
+    
+    // Assuming the tensor is 2D: [batch_size, sequence_length]
+    const sequenceLength = dims[1];
+    
+    for (let i = 0; i < dims[0]; i++) {
+        const sequenceData = data.slice(i * sequenceLength, (i + 1) * sequenceLength);
+        
+        // Create an object that mimics TensorFlow's tensor with dataSync method
+        const tensorLike = {
+            dataSync: () => sequenceData
+        };
+        
+        unstackedTensors.push(tensorLike);
+    }
+    
+    return unstackedTensors;
+}
+
 
 function getRandomColor() {
     return '#' + Math.floor(Math.random()*16777215).toString(16);
