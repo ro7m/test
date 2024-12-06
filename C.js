@@ -1,9 +1,16 @@
-function softmax(arr) {
+function softmax(input) {
+    // Convert input to an array, handling different types
+    const arr = Array.isArray(input) 
+        ? input 
+        : input && typeof input.data === 'object' 
+            ? Array.from(input.data)  // Handle tensor-like objects
+            : Array.from(input || []);  // Fallback to empty array if null/undefined
+    
     if (!arr || arr.length === 0) return [];
 
     // Numerical stability improvement
-    const max = Math.max(...arr);
-    const exp = arr.map(x => Math.exp(x - max));
+    const max = Math.max(...arr.map(Number));
+    const exp = arr.map(x => Math.exp(Number(x) - max));
     const sum = exp.reduce((a, b) => a + b, 0);
     
     return exp.map(x => x / sum);
