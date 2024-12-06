@@ -412,7 +412,7 @@ function extractBoundingBoxesFromHeatmap(heatmapCanvas, size) {
     return boundingBoxes;
     }
 
-unction softmax(tensor) {
+function softmax(tensor) {
     const data = tensor.data;
     const dims = tensor.dims;
     
