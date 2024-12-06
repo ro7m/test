@@ -61,6 +61,7 @@ async function loadModels() {
         recognitionModel = await loadONNXModel('models/parseq_dynamic.onnx');
         
         console.log('ONNX Models loaded successfully');
+        //showLoading('Ready to use ....');
         hideLoading();
     } catch (error) {
         console.error('Error loading models:', error);
@@ -79,7 +80,7 @@ async function ensureModelsLoaded() {
 }
 
 async function setupCamera() {
-    showLoading('Setting up camera...');
+    //showLoading('Setting up camera...');
     try {
         const constraints = {
             video: {
@@ -116,7 +117,7 @@ async function setupCamera() {
         video.srcObject = stream;
         return new Promise((resolve) => {
             video.onloadedmetadata = () => {
-                hideLoading();
+                //hideLoading();
                 resolve(video);
             };
         });
@@ -328,7 +329,7 @@ async function detectAndRecognizeText(imageElement) {
         });
     }
 
-       const batchSize = 32;
+    const batchSize = 32;
     let fullText = '';
     
     for (let i = 0; i < crops.length; i += batchSize) {
@@ -586,6 +587,7 @@ function clearCanvas() {
 }
 
 async function init() {
+    
     showLoading('Initializing...');
     
     initializeModelLoading();
@@ -594,7 +596,7 @@ async function init() {
     captureButton.disabled = false;
     captureButton.textContent = 'Capture';
     
-    hideLoading();
+    //hideLoading();
 }
 
 // Event Listeners
