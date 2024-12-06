@@ -196,3 +196,86 @@ function postprocessCRNN(logits, vocab) {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { ctcBestPath, postprocessCRNN };
 }
+
+
+
+----
+
+
+    function ctcBestPath(logits, vocab, inputShape, blankIndex = 0) {
+    // Softmax function for a single row
+    function softmax(arr) {
+        const maxLogit = Math.max(...arr);
+        const exp = arr.map(x => Math.exp(x - maxLogit));
+        const sumExp = exp.reduce((a, b) => a + b, 0);
+        return exp.map(x => x / sumExp);
+    }
+
+    // Remove consecutive duplicates and blank tokens
+    function collapseSequence(sequence, blankIndex) {
+        const collapsed = [];
+        for (let i = 0; i < sequence.length; i++) {
+            if (sequence[i] !== blankIndex && 
+                (collapsed.length === 0 || sequence[i] !== collapsed[collapsed.length - 1])) {
+                collapsed.push(sequence[i]);
+            }
+        }
+        return collapsed;
+    }
+
+    // Reshape Float32Array to 3D array based on input shape
+    const [batchSize, classes, sequenceLength] = inputShape;
+    const reshapedLogits = [];
+
+    // Reshape the flat logits into 3D array
+    for (let b = 0; b < batchSize; b++) {
+        const batchLogits = [];
+        for (let t = 0; t < sequenceLength; t++) {
+            const rowLogits = [];
+            for (let c = 0; c < classes; c++) {
+                const index = b * (classes * sequenceLength) + c * sequenceLength + t;
+                rowLogits.push(logits[index]);
+            }
+            batchLogits.push(rowLogits);
+        }
+        reshapedLogits.push(batchLogits);
+    }
+
+    // Results storage
+    const results = [];
+
+    // Process each sequence in logits
+    for (let i = 0; i < reshapedLogits.length; i++) {
+        // Find argmax indices for the sequence
+        const argmaxSequence = reshapedLogits[i].map(row => 
+            row.indexOf(Math.max(...row))
+        );
+
+        // Collapse sequence
+        const collapsedSequence = collapseSequence(argmaxSequence, blankIndex);
+
+        // Decode to characters
+        const word = collapsedSequence.map(idx => vocab[idx]).join('');
+
+        // Calculate confidence (minimum softmax probability)
+        const probs = reshapedLogits[i].map(softmax);
+        const confidence = Math.min(...probs.map(row => Math.max(...row)));
+
+        results.push({ word, confidence });
+    }
+
+    return results;
+}
+
+// Example usage
+function postprocessCRNN(logits, vocab, inputShape) {
+    // Assuming blank index is the last index of vocab
+    const blankIndex = vocab.length;
+    
+    return ctcBestPath(logits, vocab, inputShape, blankIndex);
+}
+
+// Export for use in modules or as needed
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { ctcBestPath, postprocessCRNN };
+}
