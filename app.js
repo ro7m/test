@@ -338,7 +338,7 @@ async function detectAndRecognizeText(imageElement) {
         
         const logits = Object.values(recognitionResult)[0].data;
 
-        const result = postprocessCRNN(logits,VOCAB);
+        const result = postprocessCRNN(logits,VOCAB,[1,32,128]);
 
         console.log("decode text " ,result);
         
@@ -356,8 +356,8 @@ async function detectAndRecognizeText(imageElement) {
     return extractedData;
 }
 
-function ctcBestPath(logits, vocab, blankIndex = 0) {
-    // Softmax function
+function ctcBestPath(logits, vocab, inputShape, blankIndex = 0) {
+    // Softmax function for a single row
     function softmax(arr) {
         const maxLogit = Math.max(...arr);
         const exp = arr.map(x => Math.exp(x - maxLogit));
@@ -377,13 +377,33 @@ function ctcBestPath(logits, vocab, blankIndex = 0) {
         return collapsed;
     }
 
+    // Reshape Float32Array to 3D array based on input shape
+    const [batchSize, classes, sequenceLength] = inputShape;
+    const reshapedLogits = [];
+
+    // Reshape the flat logits into 3D array
+    for (let b = 0; b < batchSize; b++) {
+        const batchLogits = [];
+        for (let t = 0; t < sequenceLength; t++) {
+            const rowLogits = [];
+            for (let c = 0; c < classes; c++) {
+                const index = b * (classes * sequenceLength) + c * sequenceLength + t;
+                rowLogits.push(logits[index]);
+            }
+            batchLogits.push(rowLogits);
+        }
+        reshapedLogits.push(batchLogits);
+    }
+
     // Results storage
     const results = [];
 
     // Process each sequence in logits
-    for (let i = 0; i < logits.length; i++) {
+    for (let i = 0; i < reshapedLogits.length; i++) {
         // Find argmax indices for the sequence
-        const argmaxSequence = logits[i].map(row => row.indexOf(Math.max(...row)));
+        const argmaxSequence = reshapedLogits[i].map(row => 
+            row.indexOf(Math.max(...row))
+        );
 
         // Collapse sequence
         const collapsedSequence = collapseSequence(argmaxSequence, blankIndex);
@@ -392,7 +412,7 @@ function ctcBestPath(logits, vocab, blankIndex = 0) {
         const word = collapsedSequence.map(idx => vocab[idx]).join('');
 
         // Calculate confidence (minimum softmax probability)
-        const probs = logits[i].map(softmax);
+        const probs = reshapedLogits[i].map(softmax);
         const confidence = Math.min(...probs.map(row => Math.max(...row)));
 
         results.push({ word, confidence });
@@ -402,11 +422,11 @@ function ctcBestPath(logits, vocab, blankIndex = 0) {
 }
 
 // Example usage
-function postprocessCRNN(logits, vocab) {
+function postprocessCRNN(logits, vocab, inputShape) {
     // Assuming blank index is the last index of vocab
     const blankIndex = vocab.length;
     
-    return ctcBestPath(logits, vocab, blankIndex);
+    return ctcBestPath(logits, vocab, inputShape, blankIndex);
 }
 
 function clamp(number, size) {
