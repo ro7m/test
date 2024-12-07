@@ -454,7 +454,7 @@ async function detectAndRecognizeText(imageElement) {
         //const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
 
         try {
-        const results = await recognizeText(batch.map(crop => crop.canvas), recognitionModel, vocab);
+        const results = await recognizeText(batch.map(crop => crop.canvas), recognitionModel, VOCAB);
         console.log('Decoded Texts:', results.decodedTexts);
         console.log('Best Path Indices:', results.bestPath);
         
