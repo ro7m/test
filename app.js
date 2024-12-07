@@ -448,31 +448,31 @@ async function detectAndRecognizeText(imageElement) {
         });
     }
 
-    const batchSize = 32;
-    for (let i = 0; i < crops.length; i += batchSize) {
-        const batch = crops.slice(i, i + batchSize);
+   // const batchSize = 32;
+   // for (let i = 0; i < crops.length; i += batchSize) {
+   //     const batch = crops.slice(i, i + batchSize);
         //const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
 
         try {
-        const results = await recognizeText(batch.map(crop => crop.canvas), recognitionModel, VOCAB);
+        const results = await recognizeText(batch.map(crop => crop), recognitionModel, VOCAB);
         console.log('Decoded Texts:', results.decodedTexts);
         console.log('Best Path Indices:', results.bestPath);
         
         
         // Associate each word with its bounding box
-        words.split(' ').forEach((word, index) => {
-            if (word && batch[index]) {
-                extractedData.push({
-                    word: word,
-                    boundingBox: batch[index].bbox
-                });
-            }
-        });
+        // results.decodedTexts.forEach((word, index) => {
+        //     if (word && batch[index]) {
+        //         extractedData.push({
+        //             word: word,
+        //             boundingBox: batch[index].bbox
+        //         });
+        //     }
+        // });
         } catch (error) {
         console.error('Recognition error:', error);
    }
-    }
-    return extractedData;
+    
+    return results.decodedTexts;
 }
 
 function clamp(number, size) {
