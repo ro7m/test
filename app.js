@@ -212,55 +212,174 @@ function createHeatmapFromProbMap(probMap) {
     return heatmapCanvas;
 }
 
-function preprocessImageForRecognition(crops) {
-    const processedCrops = crops.map(crop => {
-        const canvas = document.createElement('canvas');
+function preprocessImageForRecognition(crops, targetSize = [32, 128], mean = [0.694, 0.695, 0.693], std = [0.299, 0.296, 0.301]) {
+    // Helper function to resize and pad image
+    function resizeAndPadImage(imageData) {
+        // Create canvas for resizing
+        const canvas = new OffscreenCanvas(imageData.width, imageData.height);
         const ctx = canvas.getContext('2d');
-        canvas.width = 128;
-        canvas.height = 32;
-        
-        // Resize maintaining aspect ratio
-        const scale = Math.min(128 / crop.width, 32 / crop.height);
-        const scaledWidth = crop.width * scale;
-        const scaledHeight = crop.height * scale;
-        const offsetX = (128 - scaledWidth) / 2;
-        const offsetY = (32 - scaledHeight) / 2;
-        
-        ctx.drawImage(crop, offsetX, offsetY, scaledWidth, scaledHeight);
-        
-        const imageData = ctx.getImageData(0, 0, 128, 32);
-        const data = imageData.data;
-        const tensor = new Float32Array(3 * 32 * 128);
-        
-        for (let i = 0; i < 32 * 128; i++) {
-            const r = data[i * 4];
-            const g = data[i * 4 + 1];
-            const b = data[i * 4 + 2];
-            
-            tensor[i] = (r / 255 - REC_MEAN[0]) / REC_STD[0];
-            tensor[i + 32 * 128] = (g / 255 - REC_MEAN[1]) / REC_STD[1];
-            tensor[i + 2 * 32 * 128] = (b / 255 - REC_MEAN[2]) / REC_STD[2];
+        ctx.drawImage(imageData, 0, 0);
+
+        const [targetHeight, targetWidth] = targetSize;
+        let resizedWidth, resizedHeight;
+        let aspectRatio = targetWidth / targetHeight;
+
+        // Calculate resize dimensions maintaining aspect ratio
+        if (aspectRatio * imageData.height > imageData.width) {
+            resizedHeight = targetHeight;
+            resizedWidth = Math.round((targetHeight * imageData.width) / imageData.height);
+        } else {
+            resizedWidth = targetWidth;
+            resizedHeight = Math.round((targetWidth * imageData.height) / imageData.width);
         }
+
+        // Create resize canvas
+        const resizeCanvas = new OffscreenCanvas(targetWidth, targetHeight);
+        const resizeCtx = resizeCanvas.getContext('2d');
         
-        return tensor;
-    });
+        // Fill with black background
+        resizeCtx.fillStyle = 'black';
+        resizeCtx.fillRect(0, 0, targetWidth, targetHeight);
 
-    const combinedTensor = new Float32Array(
-        processedCrops.length * 3 * 32 * 128
-    );
-    processedCrops.forEach((crop, index) => {
-        combinedTensor.set(
-            crop, 
-            index * (3 * 32 * 128)
+        // Calculate positioning for resize
+        const xOffset = Math.floor((targetWidth - resizedWidth) / 2);
+        const yOffset = Math.floor((targetHeight - resizedHeight) / 2);
+
+        // Draw resized image
+        resizeCtx.drawImage(
+            canvas, 
+            0, 0, imageData.width, imageData.height, 
+            xOffset, yOffset, resizedWidth, resizedHeight
         );
+
+        // Get image data
+        const imageDataResized = resizeCtx.getImageData(0, 0, targetWidth, targetHeight);
+        return imageDataResized;
+    }
+
+    // Process each crop
+    const processedImages = crops.map(crop => {
+        // Resize and pad the image
+        const resizedImage = resizeAndPadImage(crop);
+        
+        // Allocate a new Float32Array for the entire image (3 channels)
+        const float32Data = new Float32Array(3 * targetSize[0] * targetSize[1]);
+        
+        // Normalize and separate channels
+        for (let y = 0; y < targetSize[0]; y++) {
+            for (let x = 0; x < targetSize[1]; x++) {
+                const pixelIndex = (y * targetSize[1] + x) * 4;
+                const channelSize = targetSize[0] * targetSize[1];
+                
+                // Extract RGB and normalize
+                const r = resizedImage.data[pixelIndex] / 255.0;
+                const g = resizedImage.data[pixelIndex + 1] / 255.0;
+                const b = resizedImage.data[pixelIndex + 2] / 255.0;
+
+                // Separate channels with normalization
+                float32Data[y * targetSize[1] + x] = (r - mean[0]) / std[0];  // R channel
+                float32Data[channelSize + y * targetSize[1] + x] = (g - mean[1]) / std[1];  // G channel
+                float32Data[2 * channelSize + y * targetSize[1] + x] = (b - mean[2]) / std[2];  // B channel
+            }
+        }
+
+        return float32Data;
     });
 
-    return new ort.Tensor(
-        'float32', 
-        combinedTensor, 
-        [processedCrops.length, 3, 32, 128]
-    );
+    // Concatenate multiple processed images
+    if (processedImages.length > 1) {
+        const combinedLength = processedImages[0].length * processedImages.length;
+        const combinedData = new Float32Array(combinedLength);
+        
+        processedImages.forEach((img, index) => {
+            combinedData.set(img, index * img.length);
+        });
+
+        return {
+            data: combinedData,
+            dims: [processedImages.length, 3, targetSize[0], targetSize[1]]
+        };
+    }
+
+    // Single image case
+    return {
+        data: processedImages[0],
+        dims: [1, 3, targetSize[0], targetSize[1]]
+    };
 }
+
+    async function recognizeText(crops, recognitionModel, vocab) {
+    // Preprocess images
+    const preprocessedImage = preprocessImageForRecognition(
+        crops.map(crop => crop.canvas)
+    );
+
+    // Create ONNX Runtime tensor
+    const inputTensor = new ort.Tensor('float32', preprocessedImage.data, preprocessedImage.dims);
+
+    // Run inference
+    const feeds = { 'input': inputTensor };
+    const results = await recognitionModel.run(feeds);
+
+    // Get logits (assuming the output is named 'output' or 'logits')
+    const logits = results.logits.data;
+
+    // Softmax implementation
+    function softmax(arr, axis = -1) {
+        // Find max value for numerical stability
+        const maxVal = Math.max(...arr);
+        
+        // Exponentiate and normalize
+        const exp = arr.map(x => Math.exp(x - maxVal));
+        const sumExp = exp.reduce((a, b) => a + b, 0);
+        
+        return exp.map(x => x / sumExp);
+    }
+
+    // Apply softmax to logits
+    // In ONNX Runtime, we'll need to do this manually across the last axis
+    const probabilities = [];
+    const [batchSize, classes, sequenceLength] = preprocessedImage.dims;
+
+    // Softmax for each sequence in the batch
+    for (let b = 0; b < batchSize; b++) {
+        const batchProbs = [];
+        for (let t = 0; t < sequenceLength; t++) {
+            // Extract logits for this timestep
+            const timestepLogits = [];
+            for (let c = 0; c < classes; c++) {
+                const index = b * (classes * sequenceLength) + c * sequenceLength + t;
+                timestepLogits.push(logits[index]);
+            }
+            
+            // Apply softmax to timestep
+            batchProbs.push(softmax(timestepLogits));
+        }
+        probabilities.push(batchProbs);
+    }
+
+    // Find argmax (best path) similar to tf.argMax
+    const bestPath = probabilities.map(batchProb => 
+        batchProb.map(timestep => 
+            timestep.indexOf(Math.max(...timestep))
+        )
+    );
+
+    // Convert best path to text using vocab
+    const decodedTexts = bestPath.map(sequence => 
+        sequence
+            .filter(idx => idx !== vocab.length)  // Remove blank token
+            .map(idx => vocab[idx])
+            .join('')
+    );
+
+    return {
+        probabilities,
+        bestPath,
+        decodedTexts
+    };
+}
+
 
 function decodeText(bestPath) {
     const blank = 126;
@@ -332,15 +451,13 @@ async function detectAndRecognizeText(imageElement) {
     const batchSize = 32;
     for (let i = 0; i < crops.length; i += batchSize) {
         const batch = crops.slice(i, i + batchSize);
-        const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
-        
-        const recognitionResult = await recognitionModel.run({input : inputTensor});
-        
-        const logits = Object.values(recognitionResult)[0].data;
+        //const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
 
-        const result = postprocessCRNN(logits,VOCAB,[1,32,128]);
-
-        console.log("decode text " ,result);
+        try {
+        const results = await recognizeText(batch.map(crop => crop.canvas), recognitionModel, vocab);
+        console.log('Decoded Texts:', results.decodedTexts);
+        console.log('Best Path Indices:', results.bestPath);
+        
         
         // Associate each word with its bounding box
         words.split(' ').forEach((word, index) => {
@@ -351,82 +468,11 @@ async function detectAndRecognizeText(imageElement) {
                 });
             }
         });
+        } catch (error) {
+        console.error('Recognition error:', error);
+   }
     }
-    
     return extractedData;
-}
-
-function ctcBestPath(logits, vocab, inputShape, blankIndex = 0) {
-    // Softmax function for a single row
-    function softmax(arr) {
-        const maxLogit = Math.max(...arr);
-        const exp = arr.map(x => Math.exp(x - maxLogit));
-        const sumExp = exp.reduce((a, b) => a + b, 0);
-        return exp.map(x => x / sumExp);
-    }
-
-    // Remove consecutive duplicates and blank tokens
-    function collapseSequence(sequence, blankIndex) {
-        const collapsed = [];
-        for (let i = 0; i < sequence.length; i++) {
-            if (sequence[i] !== blankIndex && 
-                (collapsed.length === 0 || sequence[i] !== collapsed[collapsed.length - 1])) {
-                collapsed.push(sequence[i]);
-            }
-        }
-        return collapsed;
-    }
-
-    // Reshape Float32Array to 3D array based on input shape
-    const [batchSize, classes, sequenceLength] = inputShape;
-    const reshapedLogits = [];
-
-    // Reshape the flat logits into 3D array
-    for (let b = 0; b < batchSize; b++) {
-        const batchLogits = [];
-        for (let t = 0; t < sequenceLength; t++) {
-            const rowLogits = [];
-            for (let c = 0; c < classes; c++) {
-                const index = b * (classes * sequenceLength) + c * sequenceLength + t;
-                rowLogits.push(logits[index]);
-            }
-            batchLogits.push(rowLogits);
-        }
-        reshapedLogits.push(batchLogits);
-    }
-
-    // Results storage
-    const results = [];
-
-    // Process each sequence in logits
-    for (let i = 0; i < reshapedLogits.length; i++) {
-        // Find argmax indices for the sequence
-        const argmaxSequence = reshapedLogits[i].map(row => 
-            row.indexOf(Math.max(...row))
-        );
-
-        // Collapse sequence
-        const collapsedSequence = collapseSequence(argmaxSequence, blankIndex);
-
-        // Decode to characters
-        const word = collapsedSequence.map(idx => vocab[idx]).join('');
-
-        // Calculate confidence (minimum softmax probability)
-        const probs = reshapedLogits[i].map(softmax);
-        const confidence = Math.min(...probs.map(row => Math.max(...row)));
-
-        results.push({ word, confidence });
-    }
-
-    return results;
-}
-
-// Example usage
-function postprocessCRNN(logits, vocab, inputShape) {
-    // Assuming blank index is the last index of vocab
-    const blankIndex = vocab.length;
-    
-    return ctcBestPath(logits, vocab, inputShape, blankIndex);
 }
 
 function clamp(number, size) {
