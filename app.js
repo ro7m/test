@@ -254,7 +254,7 @@ function createHeatmapFromProbMap(probMap) {
         const resizedImage = resizeAndPadImage(crop);
         
         // Allocate a new Float32Array for the entire image (vocab size + blank token)
-        const float32Data = new Float32Array((vocab.length + 1) * targetSize[0] * targetSize[1]);
+        const float32Data = new Float32Array((VOCAB.length + 1) * targetSize[0] * targetSize[1]);
         
         // Normalize and separate channels
         for (let y = 0; y < targetSize[0]; y++) {
@@ -289,7 +289,7 @@ function createHeatmapFromProbMap(probMap) {
 
         return {
             data: combinedData,
-            dims: [processedImages.length, vocab.length + 1, targetSize[0], targetSize[1]]
+            dims: [processedImages.length, VOCAB.length + 1, targetSize[0], targetSize[1]]
         };
     }
 
