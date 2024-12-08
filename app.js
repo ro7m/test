@@ -212,10 +212,9 @@ function createHeatmapFromProbMap(probMap) {
     return heatmapCanvas;
 }
 
-function preprocessImageForRecognition(crops, targetSize = [32, 128], mean = [0.694, 0.695, 0.693], std = [0.299, 0.296, 0.301]) {
+   function preprocessImageForRecognition(crops, vocab, targetSize = [32, 128], mean = [0.694, 0.695, 0.693], std = [0.299, 0.296, 0.301]) {
     // Helper function to resize and pad image
     function resizeAndPadImage(imageData) {
-        // Create canvas for resizing
         const canvas = new OffscreenCanvas(imageData.width, imageData.height);
         const ctx = canvas.getContext('2d');
         ctx.drawImage(imageData, 0, 0);
@@ -224,7 +223,6 @@ function preprocessImageForRecognition(crops, targetSize = [32, 128], mean = [0.
         let resizedWidth, resizedHeight;
         let aspectRatio = targetWidth / targetHeight;
 
-        // Calculate resize dimensions maintaining aspect ratio
         if (aspectRatio * imageData.height > imageData.width) {
             resizedHeight = targetHeight;
             resizedWidth = Math.round((targetHeight * imageData.width) / imageData.height);
@@ -233,37 +231,30 @@ function preprocessImageForRecognition(crops, targetSize = [32, 128], mean = [0.
             resizedHeight = Math.round((targetWidth * imageData.height) / imageData.width);
         }
 
-        // Create resize canvas
         const resizeCanvas = new OffscreenCanvas(targetWidth, targetHeight);
         const resizeCtx = resizeCanvas.getContext('2d');
         
-        // Fill with black background
         resizeCtx.fillStyle = 'black';
         resizeCtx.fillRect(0, 0, targetWidth, targetHeight);
 
-        // Calculate positioning for resize
         const xOffset = Math.floor((targetWidth - resizedWidth) / 2);
         const yOffset = Math.floor((targetHeight - resizedHeight) / 2);
 
-        // Draw resized image
         resizeCtx.drawImage(
             canvas, 
             0, 0, imageData.width, imageData.height, 
             xOffset, yOffset, resizedWidth, resizedHeight
         );
 
-        // Get image data
-        const imageDataResized = resizeCtx.getImageData(0, 0, targetWidth, targetHeight);
-        return imageDataResized;
+        return resizeCtx.getImageData(0, 0, targetWidth, targetHeight);
     }
 
     // Process each crop
     const processedImages = crops.map(crop => {
-        // Resize and pad the image
         const resizedImage = resizeAndPadImage(crop);
         
-        // Allocate a new Float32Array for the entire image (3 channels)
-        const float32Data = new Float32Array(3 * targetSize[0] * targetSize[1]);
+        // Allocate a new Float32Array for the entire image (vocab size + blank token)
+        const float32Data = new Float32Array((vocab.length + 1) * targetSize[0] * targetSize[1]);
         
         // Normalize and separate channels
         for (let y = 0; y < targetSize[0]; y++) {
@@ -276,10 +267,11 @@ function preprocessImageForRecognition(crops, targetSize = [32, 128], mean = [0.
                 const g = resizedImage.data[pixelIndex + 1] / 255.0;
                 const b = resizedImage.data[pixelIndex + 2] / 255.0;
 
-                // Separate channels with normalization
-                float32Data[y * targetSize[1] + x] = (r - mean[0]) / std[0];  // R channel
-                float32Data[channelSize + y * targetSize[1] + x] = (g - mean[1]) / std[1];  // G channel
-                float32Data[2 * channelSize + y * targetSize[1] + x] = (b - mean[2]) / std[2];  // B channel
+                // Compute grayscale and normalize
+                const grayValue = (r * 0.299 + g * 0.587 + b * 0.114);
+                
+                // Use first channel for grayscale normalized value
+                float32Data[y * targetSize[1] + x] = (grayValue - mean[0]) / std[0];
             }
         }
 
@@ -297,16 +289,16 @@ function preprocessImageForRecognition(crops, targetSize = [32, 128], mean = [0.
 
         return {
             data: combinedData,
-            dims: [processedImages.length, 3, targetSize[0], targetSize[1]]
+            dims: [processedImages.length, vocab.length + 1, targetSize[0], targetSize[1]]
         };
     }
 
     // Single image case
     return {
         data: processedImages[0],
-        dims: [1, 3, targetSize[0], targetSize[1]]
+        dims: [1, vocab.length + 1, targetSize[0], targetSize[1]]
     };
-}
+}         
 
     async function recognizeText(crops, recognitionModel, vocab) {
     // Preprocess images
