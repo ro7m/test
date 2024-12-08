@@ -296,7 +296,7 @@ function createHeatmapFromProbMap(probMap) {
     // Single image case
     return {
         data: processedImages[0],
-        dims: [1, vocab.length + 1, targetSize[0], targetSize[1]]
+        dims: [1, VOCAB.length + 1, targetSize[0], targetSize[1]]
     };
 }         
 
