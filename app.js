@@ -446,7 +446,7 @@ async function detectAndRecognizeText(imageElement) {
         //const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
 
         try {
-        const results = await recognizeText(batch.map(crop => crop), recognitionModel, VOCAB);
+        const results = await recognizeText(crops, recognitionModel, VOCAB);
         console.log('Decoded Texts:', results.decodedTexts);
         console.log('Best Path Indices:', results.bestPath);
         
@@ -464,7 +464,7 @@ async function detectAndRecognizeText(imageElement) {
         console.error('Recognition error:', error);
    }
     
-    return results.decodedTexts;
+    return extractedData;
 }
 
 function clamp(number, size) {
