@@ -212,7 +212,7 @@ function createHeatmapFromProbMap(probMap) {
     return heatmapCanvas;
 }
 
-   function preprocessImageForRecognition(crops, vocab, targetSize = [32, 128], mean = [0.694, 0.695, 0.693], std = [0.299, 0.296, 0.301]) {
+function preprocessImageForRecognition(crops, vocab, targetSize = [32, 128], mean = [0.694, 0.695, 0.693], std = [0.299, 0.296, 0.301]) {
     // Helper function to resize and pad image
     function resizeAndPadImage(imageData) {
         const canvas = new OffscreenCanvas(imageData.width, imageData.height);
@@ -253,8 +253,8 @@ function createHeatmapFromProbMap(probMap) {
     const processedImages = crops.map(crop => {
         const resizedImage = resizeAndPadImage(crop);
         
-        // Allocate a new Float32Array for the entire image (vocab size + blank token)
-        const float32Data = new Float32Array((VOCAB.length + 1) * targetSize[0] * targetSize[1]);
+        // Allocate a new Float32Array for the entire image (3 channels)
+        const float32Data = new Float32Array(3 * targetSize[0] * targetSize[1]);
         
         // Normalize and separate channels
         for (let y = 0; y < targetSize[0]; y++) {
@@ -263,15 +263,14 @@ function createHeatmapFromProbMap(probMap) {
                 const channelSize = targetSize[0] * targetSize[1];
                 
                 // Extract RGB and normalize
-                const r = resizedImage.data[pixelIndex] / 255.0;
-                const g = resizedImage.data[pixelIndex + 1] / 255.0;
-                const b = resizedImage.data[pixelIndex + 2] / 255.0;
+                const r = (resizedImage.data[pixelIndex] / 255.0 - mean[0]) / std[0];
+                const g = (resizedImage.data[pixelIndex + 1] / 255.0 - mean[1]) / std[1];
+                const b = (resizedImage.data[pixelIndex + 2] / 255.0 - mean[2]) / std[2];
 
-                // Compute grayscale and normalize
-                const grayValue = (r * 0.299 + g * 0.587 + b * 0.114);
-                
-                // Use first channel for grayscale normalized value
-                float32Data[y * targetSize[1] + x] = (grayValue - mean[0]) / std[0];
+                // Store normalized values in float32Data
+                float32Data[y * targetSize[1] + x] = r;
+                float32Data[channelSize + y * targetSize[1] + x] = g;
+                float32Data[2 * channelSize + y * targetSize[1] + x] = b;
             }
         }
 
@@ -289,16 +288,16 @@ function createHeatmapFromProbMap(probMap) {
 
         return {
             data: combinedData,
-            dims: [processedImages.length, VOCAB.length + 1, targetSize[0], targetSize[1]]
+            dims: [processedImages.length, 3, targetSize[0], targetSize[1]]
         };
     }
 
     // Single image case
     return {
         data: processedImages[0],
-        dims: [1, VOCAB.length + 1, targetSize[0], targetSize[1]]
+        dims: [1, 3, targetSize[0], targetSize[1]]
     };
-}         
+}     
 
     async function recognizeText(crops, recognitionModel, vocab) {
     // Preprocess images
