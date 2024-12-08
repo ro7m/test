@@ -299,7 +299,7 @@ function preprocessImageForRecognition(crops, vocab, targetSize = [32, 128], mea
     };
 }     
 
-    async function recognizeText(crops, recognitionModel, vocab) {
+async function recognizeText(crops, recognitionModel, vocab) {
     // Preprocess images
     const preprocessedImage = preprocessImageForRecognition(
         crops.map(crop => crop.canvas)
@@ -328,37 +328,43 @@ function preprocessImageForRecognition(crops, vocab, targetSize = [32, 128], mea
     }
 
     // Apply softmax to logits
-    // In ONNX Runtime, we'll need to do this manually across the last axis
+    // In ONNX Runtime, we'll need to do this manually across the class axis
     const probabilities = [];
-    const [batchSize, classes, sequenceLength] = preprocessedImage.dims;
+    const [batchSize, channels, height, width] = preprocessedImage.dims;
 
-    // Softmax for each sequence in the batch
+    // Assuming the logits output has shape [batchSize, numClasses, height, width]
+    const numClasses = logits.length / (batchSize * height * width);
+
     for (let b = 0; b < batchSize; b++) {
         const batchProbs = [];
-        for (let t = 0; t < sequenceLength; t++) {
-            // Extract logits for this timestep
-            const timestepLogits = [];
-            for (let c = 0; c < classes; c++) {
-                const index = b * (classes * sequenceLength) + c * sequenceLength + t;
-                timestepLogits.push(logits[index]);
+        for (let h = 0; h < height; h++) {
+            for (let w = 0; w < width; w++) {
+                // Extract logits for this position
+                const positionLogits = [];
+                for (let c = 0; c < numClasses; c++) {
+                    const index = b * (numClasses * height * width) + c * (height * width) + h * width + w;
+                    positionLogits.push(logits[index]);
+                }
+                
+                // Apply softmax to position
+                batchProbs.push(softmax(positionLogits));
             }
-            
-            // Apply softmax to timestep
-            batchProbs.push(softmax(timestepLogits));
         }
         probabilities.push(batchProbs);
     }
 
     // Find argmax (best path) similar to tf.argMax
     const bestPath = probabilities.map(batchProb => 
-        batchProb.map(timestep => 
-            timestep.indexOf(Math.max(...timestep))
+        batchProb.map(row => 
+            row.map(timestep => 
+                timestep.indexOf(Math.max(...timestep))
+            )
         )
     );
 
     // Convert best path to text using vocab
     const decodedTexts = bestPath.map(sequence => 
-        sequence
+        sequence.flat()  // Flatten the 2D array to 1D
             .filter(idx => idx !== vocab.length)  // Remove blank token
             .map(idx => vocab[idx])
             .join('')
@@ -370,6 +376,8 @@ function preprocessImageForRecognition(crops, vocab, targetSize = [32, 128], mea
         decodedTexts
     };
 }
+
+
 
 
 function decodeText(bestPath) {
