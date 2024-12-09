@@ -312,60 +312,47 @@ async function recognizeText(crops, recognitionModel, vocab) {
     const feeds = { 'input': inputTensor };
     const results = await recognitionModel.run(feeds);
 
-    // Get logits (assuming the output is named 'output' or 'logits')
+    // Get logits
     const logits = results.logits.data;
+    const [batchSize, height, numClasses] = results.logits.dims;
 
     // Softmax implementation
-    function softmax(arr, axis = -1) {
-        // Find max value for numerical stability
+    function softmax(arr) {
         const maxVal = Math.max(...arr);
-        
-        // Exponentiate and normalize
         const exp = arr.map(x => Math.exp(x - maxVal));
         const sumExp = exp.reduce((a, b) => a + b, 0);
-        
         return exp.map(x => x / sumExp);
     }
 
-    // Apply softmax to logits
-    // In ONNX Runtime, we'll need to do this manually across the class axis
+    // Process logits
     const probabilities = [];
-    const [batchSize, channels, height, width] = preprocessedImage.dims;
-
-    // Assuming the logits output has shape [batchSize, numClasses, height, width]
-    const numClasses = logits.length / (batchSize * height * width);
-
     for (let b = 0; b < batchSize; b++) {
         const batchProbs = [];
         for (let h = 0; h < height; h++) {
-            for (let w = 0; w < width; w++) {
-                // Extract logits for this position
-                const positionLogits = [];
-                for (let c = 0; c < numClasses; c++) {
-                    const index = b * (numClasses * height * width) + c * (height * width) + h * width + w;
-                    positionLogits.push(logits[index]);
-                }
-                
-                // Apply softmax to position
-                batchProbs.push(softmax(positionLogits));
+            // Extract logits for this position
+            const positionLogits = [];
+            for (let c = 0; c < numClasses; c++) {
+                const index = b * (height * numClasses) + h * numClasses + c;
+                positionLogits.push(logits[index]);
             }
+            
+            // Apply softmax to position
+            batchProbs.push(softmax(positionLogits));
         }
         probabilities.push(batchProbs);
     }
 
-    // Find argmax (best path) similar to tf.argMax
+    // Find argmax (best path)
     const bestPath = probabilities.map(batchProb => 
         batchProb.map(row => 
-            row.map(timestep => 
-                timestep.indexOf(Math.max(...timestep))
-            )
+            row.indexOf(Math.max(...row))
         )
     );
 
     // Convert best path to text using vocab
     const decodedTexts = bestPath.map(sequence => 
-        sequence.flat()  // Flatten the 2D array to 1D
-            .filter(idx => idx !== vocab.length)  // Remove blank token
+        sequence
+            .filter(idx => idx !== numClasses - 1)  // Remove blank token (last index)
             .map(idx => vocab[idx])
             .join('')
     );
