@@ -300,79 +300,92 @@ function preprocessImageForRecognition(crops, vocab, targetSize = [32, 128], mea
 }     
 
 async function recognizeText(crops, recognitionModel, vocab) {
-    try {
-        // Preprocess images
-        const preprocessedImages = crops.map(crop => preprocessImageForRecognition(crop.canvas));
+    // Preprocess images
+    const preprocessedImage = preprocessImageForRecognition(
+        crops.map(crop => crop.canvas)
+    );
 
-        // Create ONNX Runtime tensors
-        const inputTensors = preprocessedImages.map(image => new ort.Tensor('float32', image.data, image.dims));
+    // Create ONNX Runtime tensor
+    const inputTensor = new ort.Tensor('float32', preprocessedImage.data, preprocessedImage.dims);
 
-        // Run inference for each crop
-        const results = await Promise.all(inputTensors.map(tensor => {
-            const feeds = { 'input': tensor };
-            return recognitionModel.run(feeds);
-        }));
+    // Run inference
+    const feeds = { 'input': inputTensor };
+    const results = await recognitionModel.run(feeds);
 
-        // Softmax implementation
-        function softmax(arr) {
-            const maxVal = Math.max(...arr);
-            const exp = arr.map(x => Math.exp(x - maxVal));
-            const sumExp = exp.reduce((a, b) => a + b, 0);
-            return exp.map(x => x / sumExp);
-        }
+    // Get logits
+    const logits = results.logits.data;
+    const [batchSize, height, numClasses] = results.logits.dims;
 
-        // Process logits and extract bounding box information
-        const finalResults = crops.map((crop, index) => {
-            const logits = results[index].logits.data;
-            const [batchSize, height, numClasses] = results[index].logits.dims;
-
-            // Process logits
-            const probabilities = [];
-            for (let b = 0; b < batchSize; b++) {
-                const batchProbs = [];
-                for (let h = 0; h < height; h++) {
-                    // Extract logits for this position
-                    const positionLogits = [];
-                    for (let c = 0; c < numClasses; c++) {
-                        const index = b * (height * numClasses) + h * numClasses + c;
-                        positionLogits.push(logits[index]);
-                    }
-                    
-                    // Apply softmax to position
-                    batchProbs.push(softmax(positionLogits));
-                }
-                probabilities.push(batchProbs);
-            }
-
-            // Find argmax (best path)
-            const bestPath = probabilities.map(batchProb => 
-                batchProb.map(row => 
-                    row.indexOf(Math.max(...row))
-                )
-            );
-
-            // Convert best path to text using vocab
-            const decodedText = bestPath[0]
-                .filter(idx => idx !== numClasses - 1)  // Remove blank token (last index)
-                .map(idx => vocab[idx])
-                .join('');
-
-            // Return result with bounding box information
-            return {
-                probabilities: probabilities[0],
-                bestPath: bestPath[0],
-                decodedText,
-                boundingBox: crop.boundingBox  // Assuming crop has boundingBox property
-            };
-        });
-
-        return finalResults;
-    } catch (error) {
-        console.error("Error during text recognition:", error);
-        throw error;
+    // Softmax implementation
+    function softmax(arr) {
+        const maxVal = Math.max(...arr);
+        const exp = arr.map(x => Math.exp(x - maxVal));
+        const sumExp = exp.reduce((a, b) => a + b, 0);
+        return exp.map(x => x / sumExp);
     }
+
+    // Process logits
+    const probabilities = [];
+    for (let b = 0; b < batchSize; b++) {
+        const batchProbs = [];
+        for (let h = 0; h < height; h++) {
+            // Extract logits for this position
+            const positionLogits = [];
+            for (let c = 0; c < numClasses; c++) {
+                const index = b * (height * numClasses) + h * numClasses + c;
+                positionLogits.push(logits[index]);
+            }
+            
+            // Apply softmax to position
+            batchProbs.push(softmax(positionLogits));
+        }
+        probabilities.push(batchProbs);
+    }
+
+    // Find argmax (best path)
+    const bestPath = probabilities.map(batchProb => 
+        batchProb.map(row => 
+            row.indexOf(Math.max(...row))
+        )
+    );
+
+    // Convert best path to text using vocab
+    const decodedTexts = bestPath.map(sequence => 
+        sequence
+            .filter(idx => idx !== numClasses - 1)  // Remove blank token (last index)
+            .map(idx => vocab[idx])
+            .join('')
+    );
+
+    return {
+        probabilities,
+        bestPath,
+        decodedTexts
+    };
 }
 
+
+
+
+function decodeText(bestPath) {
+    const blank = 126;
+    let collapsed = "";
+    let lastChar = null;
+
+    for (const sequence of bestPath) {
+        const values = sequence.data;
+        for (const k of values) {
+            if (k !== blank && k !== lastChar) {         
+                collapsed += VOCAB[k];
+                lastChar = k;
+            } else if (k === blank) {
+                lastChar = null;
+            }
+        }
+        collapsed += ' ';
+    }
+    return collapsed.trim();
+}
 
 async function detectAndRecognizeText(imageElement) {
    
@@ -421,18 +434,26 @@ async function detectAndRecognizeText(imageElement) {
         });
     }
 
+   // const batchSize = 32;
+   // for (let i = 0; i < crops.length; i += batchSize) {
+   //     const batch = crops.slice(i, i + batchSize);
+        //const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
+
         try {
         const results = await recognizeText(crops, recognitionModel, VOCAB);
-        console.log('Decoded Texts:', results.text);        
+        console.log('Decoded Texts:', results.decodedTexts);
+        console.log('Best Path Indices:', results.bestPath);
         
-        results.forEach(result => {
-                extractedData.push({
-                    word: result.text,
-                    boundingBox: result.boundingBox,
-                    confidence: result.confidence
-                });
-            
-        });
+        
+        // Associate each word with its bounding box
+        // results.decodedTexts.forEach((word, index) => {
+        //     if (word && batch[index]) {
+        //         extractedData.push({
+        //             word: word,
+        //             boundingBox: batch[index].bbox
+        //         });
+        //     }
+        // });
         } catch (error) {
         console.error('Recognition error:', error);
    }
