@@ -523,7 +523,7 @@ async function handleCapture() {
     img.onload = async () => {
         try {
             extractedData = await detectAndRecognizeText(img);
-            extractedText = extractedData.map(item => item.word).join('\n');
+            extractedText = extractedData.map(item => item.word).join('<br>');
             const totalTime = ((endTime - startTime)/1000).toFixed(2);
             resultElement.innerHTML = `<small> Processing Time: ${totalTime} seconds </small> <br> Text: ${extractedText}`;
             
