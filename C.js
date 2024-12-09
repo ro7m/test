@@ -4,13 +4,7 @@ async function recognizeText(crops, recognitionModel, vocab) {
         throw new Error('Text recognition requires valid inputs');
     }
 
-    // Store original crop information with bounding boxes
-    const cropInfo = crops.map(crop => ({
-        canvas: crop.canvas,
-        boundingBox: crop.boundingBox
-    }));
-
-    // Advanced decoding function
+    // Advanced decoding function tailored to [17, 32, 127] logits
     function advancedTextDecoding(logits, vocab) {
         const [batchSize, sequenceLength, vocabSize] = logits.dims;
         const results = [];
@@ -18,7 +12,6 @@ async function recognizeText(crops, recognitionModel, vocab) {
         for (let b = 0; b < batchSize; b++) {
             const decodedChars = [];
             let confidenceScore = 1.0;
-            let lastCharIndex = -1;
 
             // Process each position in the sequence
             for (let t = 0; t < sequenceLength; t++) {
@@ -30,49 +23,50 @@ async function recognizeText(crops, recognitionModel, vocab) {
                     positionLogits.push({
                         index: c,
                         logit: logits.data[logitIndex],
-                        char: vocab[c] || ''
+                        char: c < vocab.length ? vocab[c] : ''
                     });
                 }
 
-                // Sort and filter logits
+                // More aggressive candidate selection
                 const topCandidates = positionLogits
-                    .filter(opt => opt.char !== '')
+                    .filter(opt => opt.char && opt.char !== '')
                     .sort((a, b) => b.logit - a.logit)
-                    .slice(0, 3);  // Consider top 3 candidates
+                    .slice(0, 3);
 
                 if (topCandidates.length > 0) {
                     const bestCandidate = topCandidates[0];
                     
-                    // Prevent excessive repetition
-                    if (bestCandidate.index !== lastCharIndex || 
-                        (decodedChars.length === 0 || bestCandidate.char !== decodedChars[decodedChars.length - 1])) {
+                    // Intelligent character addition
+                    if (decodedChars.length === 0 || 
+                        bestCandidate.char !== decodedChars[decodedChars.length - 1]) {
                         decodedChars.push(bestCandidate.char);
                         
-                        // Logarithmic confidence calculation
-                        confidenceScore *= Math.log1p(Math.exp(bestCandidate.logit)) / 
-                                           Math.log1p(Math.exp(positionLogits.reduce((max, p) => Math.max(max, p.logit), -Infinity)));
+                        // Confidence calculation
+                        const softmaxDenom = positionLogits.reduce((sum, p) => 
+                            sum + Math.exp(p.logit), 0);
+                        
+                        confidenceScore *= Math.exp(bestCandidate.logit) / softmaxDenom;
                     }
                 }
             }
 
-            // Text reconstruction and cleaning
+            // Reconstruct text
             const reconstructedText = decodedChars.join('').trim();
 
             results.push({
                 text: reconstructedText,
                 confidence: Math.min(Math.max(confidenceScore, 0), 1),
-                rawChars: decodedChars,
-                boundingBox: cropInfo[b].boundingBox  // Include original bounding box
+                rawChars: decodedChars
             });
         }
 
         return results;
     }
 
-    // Post-processing function
-    function postProcessRecognition(results) {
+    // Post-processing function with additional filtering
+    function postProcessRecognition(results, crops) {
         return results
-            .map(result => {
+            .map((result, index) => {
                 // Clean up text
                 let cleanedText = result.text
                     .replace(/\s+/g, ' ')  // Normalize whitespace
@@ -80,22 +74,22 @@ async function recognizeText(crops, recognitionModel, vocab) {
 
                 // Additional filtering
                 const isValid = cleanedText.length > 1 && 
-                                result.confidence > 0.3 && 
+                                result.confidence > 0.2 && 
                                 /[a-zA-Z0-9]/.test(cleanedText);
 
                 return {
                     text: cleanedText,
                     confidence: result.confidence,
-                    boundingBox: result.boundingBox,
+                    boundingBox: crops[index].boundingBox,
                     isValid: isValid
                 };
             })
             .filter(r => r.isValid)
-            .map(({ isValid, ...result }) => result);  // Remove isValid flag from final output
+            .map(({ isValid, ...result }) => result);  // Remove isValid flag
     }
 
     try {
-        // Preprocess images (using your existing preprocessing)
+        // Preprocess images 
         const preprocessedImage = preprocessImageForRecognition(
             crops.map(crop => crop.canvas)
         );
@@ -111,12 +105,20 @@ async function recognizeText(crops, recognitionModel, vocab) {
         const decodedResults = advancedTextDecoding(results.logits, vocab);
 
         // Post-process and filter results
-        const finalResults = postProcessRecognition(decodedResults);
+        const finalResults = postProcessRecognition(decodedResults, crops);
+
+        // Debugging output
+        console.log('Recognition Results:', finalResults);
 
         return finalResults;
 
     } catch (error) {
-        console.error('Text recognition error:', error);
+        console.error('Text recognition comprehensive error:', error);
+        // Log full error details
+        console.error('Error Details:', {
+            message: error.message,
+            stack: error.stack
+        });
         return [];
     }
 }
