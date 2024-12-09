@@ -368,8 +368,11 @@ async function recognizeText(crops, recognitionModel, vocab) {
     };
 }
 
+let startTime , endTime;
 
 async function detectAndRecognizeText(imageElement) {
+
+   startTime = performance.now(); 
    
    const detectionResult = await detectText(imageElement, true);
         
@@ -429,7 +432,10 @@ async function detectAndRecognizeText(imageElement) {
                     boundingBox: crops[i].bbox,
                     probablities: results["probabilities"][i]
                 });
-       }         
+       } 
+        endTime = performance.now();
+        const totalTime = ((endTime - startTime)/1000).toFixed(2);
+        resultTime.innerHTML += `<br><small> Processing Time: ${totalTime} seconds </small>`;   
       } catch (error) {
         console.error('Recognition error:', error);
    }
@@ -501,6 +507,8 @@ function enableCaptureButton() {
 
 
 async function handleCapture() {
+    startTime = null;
+    endTime = null;
     disableCaptureButton();
     showLoading('Processing image...');
 
