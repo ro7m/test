@@ -626,11 +626,11 @@ async function init() {
 
 // Event Listeners
 captureButton.addEventListener('click', handleCapture);
-captureButton.addEventListener('touchstart', () => {
-    triggerFocus();
-    // Wait a short moment for focus to adjust
-    setTimeout(handleCapture, 500);
-});
+// captureButton.addEventListener('touchstart', () => {
+//     triggerFocus();
+//     // Wait a short moment for focus to adjust
+//     setTimeout(handleCapture, 500);
+// });
 confirmButton.addEventListener('click', handleConfirm);
 confirmButton.addEventListener('touchstart', handleConfirm);
 retryButton.addEventListener('click', handleRetry);
