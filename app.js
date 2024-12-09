@@ -303,10 +303,10 @@ async function recognizeText(crops, recognitionModel, vocab) {
     // Store original crop information
     const cropInfo = crops.map(crop => ({
         canvas: crop.canvas,
-        boundingBox: crop.bbox 
+        boundingBox: crop.bbox
     }));
 
-    // Preprocess images
+    // Preprocess images (using your existing preprocessing)
     const preprocessedImage = preprocessImageForRecognition(
         cropInfo.map(crop => crop.canvas)
     );
@@ -322,13 +322,14 @@ async function recognizeText(crops, recognitionModel, vocab) {
     const logits = results.logits.data;
     const [batchSize, height, numClasses] = results.logits.dims;
 
-    // Advanced softmax with beam search
-    function beamSearchDecoding(logits, vocab, beamWidth = 3) {
+    function decodeText(logits, vocab) {
         const decodedResults = [];
 
         for (let b = 0; b < batchSize; b++) {
-            // Extract logits for this batch
-            const batchLogits = [];
+            let bestText = '';
+            let overallConfidence = 1.0;
+
+            // Track the most probable tokens for each position
             for (let h = 0; h < height; h++) {
                 const positionLogits = [];
                 for (let c = 0; c < numClasses; c++) {
@@ -338,26 +339,35 @@ async function recognizeText(crops, recognitionModel, vocab) {
                         logit: logits[index]
                     });
                 }
-                
-                // Sort logits by probability (descending)
-                const sortedLogits = positionLogits
+
+                // Sort logits by probability
+                const sortedOptions = positionLogits
                     .sort((a, b) => b.logit - a.logit)
-                    .slice(0, beamWidth);
-                
-                batchLogits.push(sortedLogits);
+                    .filter(option => option.index !== numClasses - 1); // Skip blank/padding token
+
+                // Select top candidate
+                if (sortedOptions.length > 0) {
+                    const topOption = sortedOptions[0];
+                    const character = vocab[topOption.index];
+                    
+                    // Prevent adding repeated characters
+                    if (character && (!bestText.length || character !== bestText[bestText.length - 1])) {
+                        bestText += character;
+                        // Update confidence (using softmax-like probability)
+                        overallConfidence *= Math.exp(topOption.logit) / 
+                            positionLogits.reduce((sum, opt) => sum + Math.exp(opt.logit), 0);
+                    }
+                }
             }
 
-            // Combine top candidates
-            const candidateTexts = generateCandidateTexts(batchLogits, vocab);
-            
-            // Select best candidate
-            const bestCandidate = candidateTexts.reduce((best, current) => 
-                (!best || current.confidence > best.confidence) ? current : best
-            );
+            // Additional filtering and cleaning
+            const cleanedText = bestText.trim()
+                .replace(/[^a-zA-Z0-9\s]/g, '')  // Remove special characters
+                .replace(/\s+/g, ' ');  // Normalize whitespace
 
             decodedResults.push({
-                text: bestCandidate.text,
-                confidence: bestCandidate.confidence,
+                text: cleanedText,
+                confidence: Math.max(0, Math.min(1, overallConfidence)),
                 boundingBox: cropInfo[b].boundingBox
             });
         }
@@ -365,55 +375,14 @@ async function recognizeText(crops, recognitionModel, vocab) {
         return decodedResults;
     }
 
-    // Helper function to generate candidate texts
-    function generateCandidateTexts(batchLogits, vocab) {
-        const candidates = [{ 
-            text: '', 
-            confidence: 1, 
-            path: [] 
-        }];
-
-        for (const positionOptions of batchLogits) {
-            const newCandidates = [];
-
-            for (const candidate of candidates) {
-                for (const option of positionOptions) {
-                    // Skip blank token (usually last index)
-                    if (option.index === numClasses - 1) continue;
-
-                    const newText = candidate.text + vocab[option.index];
-                    const newConfidence = candidate.confidence * Math.exp(option.logit);
-
-                    newCandidates.push({
-                        text: newText,
-                        confidence: newConfidence,
-                        path: [...candidate.path, option.index]
-                    });
-                }
-            }
-
-            // Keep top candidates
-            candidates.length = 0;
-            candidates.push(...newCandidates
-                .sort((a, b) => b.confidence - a.confidence)
-                .slice(0, 3)
-            );
-        }
-
-        return candidates;
-    }
-
     // Perform decoding
-    const recognitionResults = beamSearchDecoding(logits, vocab);
+    const recognitionResults = decodeText(logits, vocab);
 
-    // Post-processing to clean up and improve text
-    const processedResults = recognitionResults.map(result => ({
-        text: result.text.trim(),
-        confidence: result.confidence,
-        boundingBox: result.boundingBox
-    }));
-
-    return processedResults;
+    // Final filtering to remove very short or invalid results
+    return recognitionResults.filter(result => 
+        result.text.length > 1 && 
+        result.confidence > 0.3
+    );
 }
 
 
