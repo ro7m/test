@@ -518,7 +518,7 @@ async function handleCapture() {
     img.onload = async () => {
         try {
             extractedData = await detectAndRecognizeText(img);
-            extractedText = extractedData.map(item => item.word).join(' ');
+            extractedText = extractedData.map(item => item.word).join('<br>');
             resultElement.textContent = `Extracted Text: ${extractedText}`;
             
             previewCanvas.style.display = 'block';
