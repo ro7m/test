@@ -57,8 +57,12 @@ async function loadONNXModel(modelPath) {
 
 async function loadModels() {
     try {
-        detectionModel = await loadONNXModel('models/rep_fast_base.onnx');
-        recognitionModel = await loadONNXModel('models/crnn_mobilenet_v3_large.onnx');
+        detectionModel = await loadONNXModel('models/rep_fast_base.onnx', {
+            executionProviders: ['webgl', 'wasm']
+        });
+        recognitionModel = await loadONNXModel('models/crnn_mobilenet_v3_large.onnx', {
+            executionProviders: ['webgl', 'wasm']
+        });
         
         console.log('ONNX Models loaded successfully');
         //showLoading('Ready to use ....');
