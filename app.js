@@ -300,9 +300,15 @@ function preprocessImageForRecognition(crops, vocab, targetSize = [32, 128], mea
 }     
 
 async function recognizeText(crops, recognitionModel, vocab) {
+    // Store original crop information
+    const cropInfo = crops.map(crop => ({
+        canvas: crop.canvas,
+        boundingBox: crop.boundingBox // Assuming original crops had bounding box info
+    }));
+
     // Preprocess images
     const preprocessedImage = preprocessImageForRecognition(
-        crops.map(crop => crop.canvas)
+        cropInfo.map(crop => crop.canvas)
     );
 
     // Create ONNX Runtime tensor
@@ -316,75 +322,98 @@ async function recognizeText(crops, recognitionModel, vocab) {
     const logits = results.logits.data;
     const [batchSize, height, numClasses] = results.logits.dims;
 
-    // Softmax implementation
-    function softmax(arr) {
-        const maxVal = Math.max(...arr);
-        const exp = arr.map(x => Math.exp(x - maxVal));
-        const sumExp = exp.reduce((a, b) => a + b, 0);
-        return exp.map(x => x / sumExp);
-    }
+    // Advanced softmax with beam search
+    function beamSearchDecoding(logits, vocab, beamWidth = 3) {
+        const decodedResults = [];
 
-    // Process logits
-    const probabilities = [];
-    for (let b = 0; b < batchSize; b++) {
-        const batchProbs = [];
-        for (let h = 0; h < height; h++) {
-            // Extract logits for this position
-            const positionLogits = [];
-            for (let c = 0; c < numClasses; c++) {
-                const index = b * (height * numClasses) + h * numClasses + c;
-                positionLogits.push(logits[index]);
+        for (let b = 0; b < batchSize; b++) {
+            // Extract logits for this batch
+            const batchLogits = [];
+            for (let h = 0; h < height; h++) {
+                const positionLogits = [];
+                for (let c = 0; c < numClasses; c++) {
+                    const index = b * (height * numClasses) + h * numClasses + c;
+                    positionLogits.push({
+                        index: c,
+                        logit: logits[index]
+                    });
+                }
+                
+                // Sort logits by probability (descending)
+                const sortedLogits = positionLogits
+                    .sort((a, b) => b.logit - a.logit)
+                    .slice(0, beamWidth);
+                
+                batchLogits.push(sortedLogits);
             }
+
+            // Combine top candidates
+            const candidateTexts = generateCandidateTexts(batchLogits, vocab);
             
-            // Apply softmax to position
-            batchProbs.push(softmax(positionLogits));
+            // Select best candidate
+            const bestCandidate = candidateTexts.reduce((best, current) => 
+                (!best || current.confidence > best.confidence) ? current : best
+            );
+
+            decodedResults.push({
+                text: bestCandidate.text,
+                confidence: bestCandidate.confidence,
+                boundingBox: cropInfo[b].boundingBox
+            });
         }
-        probabilities.push(batchProbs);
+
+        return decodedResults;
     }
 
-    // Find argmax (best path)
-    const bestPath = probabilities.map(batchProb => 
-        batchProb.map(row => 
-            row.indexOf(Math.max(...row))
-        )
-    );
+    // Helper function to generate candidate texts
+    function generateCandidateTexts(batchLogits, vocab) {
+        const candidates = [{ 
+            text: '', 
+            confidence: 1, 
+            path: [] 
+        }];
 
-    // Convert best path to text using vocab
-    const decodedTexts = bestPath.map(sequence => 
-        sequence
-            .filter(idx => idx !== numClasses - 1)  // Remove blank token (last index)
-            .map(idx => vocab[idx])
-            .join('')
-    );
+        for (const positionOptions of batchLogits) {
+            const newCandidates = [];
 
-    return {
-        probabilities,
-        bestPath,
-        decodedTexts
-    };
-}
+            for (const candidate of candidates) {
+                for (const option of positionOptions) {
+                    // Skip blank token (usually last index)
+                    if (option.index === numClasses - 1) continue;
 
+                    const newText = candidate.text + vocab[option.index];
+                    const newConfidence = candidate.confidence * Math.exp(option.logit);
 
-
-
-function decodeText(bestPath) {
-    const blank = 126;
-    let collapsed = "";
-    let lastChar = null;
-
-    for (const sequence of bestPath) {
-        const values = sequence.data;
-        for (const k of values) {
-            if (k !== blank && k !== lastChar) {         
-                collapsed += VOCAB[k];
-                lastChar = k;
-            } else if (k === blank) {
-                lastChar = null;
+                    newCandidates.push({
+                        text: newText,
+                        confidence: newConfidence,
+                        path: [...candidate.path, option.index]
+                    });
+                }
             }
+
+            // Keep top candidates
+            candidates.length = 0;
+            candidates.push(...newCandidates
+                .sort((a, b) => b.confidence - a.confidence)
+                .slice(0, 3)
+            );
         }
-        collapsed += ' ';
+
+        return candidates;
     }
-    return collapsed.trim();
+
+    // Perform decoding
+    const recognitionResults = beamSearchDecoding(logits, vocab);
+
+    // Post-processing to clean up and improve text
+    const processedResults = recognitionResults.map(result => ({
+        text: result.text.trim(),
+        confidence: result.confidence,
+        boundingBox: result.boundingBox
+    }));
+
+    return processedResults;
 }
 
 async function detectAndRecognizeText(imageElement) {
@@ -434,26 +463,18 @@ async function detectAndRecognizeText(imageElement) {
         });
     }
 
-   // const batchSize = 32;
-   // for (let i = 0; i < crops.length; i += batchSize) {
-   //     const batch = crops.slice(i, i + batchSize);
-        //const inputTensor = preprocessImageForRecognition(batch.map(crop => crop.canvas));
-
         try {
         const results = await recognizeText(crops, recognitionModel, VOCAB);
-        console.log('Decoded Texts:', results.decodedTexts);
-        console.log('Best Path Indices:', results.bestPath);
+        console.log('Decoded Texts:', results.text);        
         
-        
-        // Associate each word with its bounding box
-        // results.decodedTexts.forEach((word, index) => {
-        //     if (word && batch[index]) {
-        //         extractedData.push({
-        //             word: word,
-        //             boundingBox: batch[index].bbox
-        //         });
-        //     }
-        // });
+        results.forEach(result => {
+                extractedData.push({
+                    word: result.text,
+                    boundingBox: result.boundingBox,
+                    confidence: result.confidence
+                });
+            
+        });
         } catch (error) {
         console.error('Recognition error:', error);
    }
