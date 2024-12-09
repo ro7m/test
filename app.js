@@ -434,8 +434,7 @@ async function detectAndRecognizeText(imageElement) {
                 });
        } 
         endTime = performance.now();
-        const totalTime = ((endTime - startTime)/1000).toFixed(2);
-        resultTime.innerHTML += `<br><small> Processing Time: ${totalTime} seconds </small>`;   
+
       } catch (error) {
         console.error('Recognition error:', error);
    }
@@ -507,8 +506,6 @@ function enableCaptureButton() {
 
 
 async function handleCapture() {
-    startTime = null;
-    endTime = null;
     disableCaptureButton();
     showLoading('Processing image...');
 
@@ -526,8 +523,9 @@ async function handleCapture() {
     img.onload = async () => {
         try {
             extractedData = await detectAndRecognizeText(img);
-            extractedText = extractedData.map(item => item.word).join('<br>');
-            resultElement.textContent = `Extracted Text: ${extractedText}`;
+            extractedText = extractedData.map(item => item.word).join('\n');
+            const totalTime = ((endTime - startTime)/1000).toFixed(2);
+            resultElement.textContent = `<small> Processing Time: ${totalTime} seconds </small> <br> Text: ${extractedText}`;
             
             previewCanvas.style.display = 'block';
             confirmButton.style.display = 'inline-block';
@@ -537,6 +535,8 @@ async function handleCapture() {
             console.error('Error during text extraction:', error);
             resultElement.textContent = 'Error occurred during text extraction';
         } finally {
+            startTime = null;
+            endTime = null;
             enableCaptureButton();
             hideLoading();
         }
