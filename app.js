@@ -421,9 +421,9 @@ async function detectAndRecognizeText(imageElement) {
        for (let i=0; i<results["decodedTexts"].length ; i++){
 
             extractedData.push({
-                    word: results["decodedTexts"].text,
+                    word: results["decodedTexts"][i],
                     boundingBox: crops[i].bbox,
-                    probablities: results["probabilities"].confidence
+                    probablities: results["probabilities"][i]
                 });
        }         
       } catch (error) {
