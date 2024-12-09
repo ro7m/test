@@ -58,7 +58,7 @@ async function loadONNXModel(modelPath) {
 async function loadModels() {
     try {
         detectionModel = await loadONNXModel('models/rep_fast_base.onnx');
-        recognitionModel = await loadONNXModel('models/crnn_mobilenet_v3_large.onnx');
+        recognitionModel = await loadONNXModel('models/parseq_dynamic.onnx');
         
         console.log('ONNX Models loaded successfully');
         //showLoading('Ready to use ....');
