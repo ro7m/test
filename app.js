@@ -303,7 +303,7 @@ async function recognizeText(crops, recognitionModel, vocab) {
     // Store original crop information
     const cropInfo = crops.map(crop => ({
         canvas: crop.canvas,
-        boundingBox: crop.boundingBox // Assuming original crops had bounding box info
+        boundingBox: crop.bbox 
     }));
 
     // Preprocess images
