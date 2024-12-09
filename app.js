@@ -279,7 +279,7 @@ function preprocessImageForRecognition(crops, vocab, targetSize = [32, 128], mea
 
     // Concatenate multiple processed images
     if (processedImages.length > 1) {
-        const combinedLength = processedImages[0].length * processedImages.length;
+        const combinedLength = 3 * targetSize[0] * targetSize[1] * processedImages.length;
         const combinedData = new Float32Array(combinedLength);
         
         processedImages.forEach((img, index) => {
