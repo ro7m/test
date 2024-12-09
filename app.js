@@ -300,6 +300,17 @@ function preprocessImageForRecognition(crops, vocab, targetSize = [32, 128], mea
 }     
 
 async function recognizeText(crops, recognitionModel, vocab) {
+
+     const preprocessedImage = preprocessImageForRecognition(
+        crops.map(crop => crop.canvas)
+    );
+
+    // Create ONNX Runtime tensor
+    const inputTensor = new ort.Tensor('float32', preprocessedImage.data, preprocessedImage.dims);
+
+    // Run inference
+    const feeds = { 'input': inputTensor };
+    const results = await recognitionModel.run(feeds); 
   
        // Get logits
     const logits = results.logits.data;
@@ -404,17 +415,19 @@ async function detectAndRecognizeText(imageElement) {
 
         try {
         const results = await recognizeText(crops, recognitionModel, VOCAB);
-        console.log('Decoded Texts:', results);        
         
-        results.forEach(result => {
-                extractedData.push({
-                    word: result.text,
-                    boundingBox: result.boundingBox,
-                    confidence: result.confidence
+        console.log('Decoded Texts:', results);        
+
+
+       for (let i=0; i<results.length ; i++){
+
+            extractedData.push({
+                    word: results[i].text,
+                    boundingBox: crops[i].bbox,
+                    probablities: results[i].confidence
                 });
-            
-        });
-        } catch (error) {
+       }         
+      } catch (error) {
         console.error('Recognition error:', error);
    }
     
