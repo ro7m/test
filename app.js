@@ -299,90 +299,122 @@ function preprocessImageForRecognition(crops, vocab, targetSize = [32, 128], mea
     };
 }     
 
-async function recognizeText(crops, recognitionModel, vocab) {
-    // Store original crop information
+async function recognizeText(crops, recognitionModel, vocab) {   
+
+    // Store original crop information with bounding boxes
     const cropInfo = crops.map(crop => ({
         canvas: crop.canvas,
         boundingBox: crop.bbox
     }));
 
-    // Preprocess images (using your existing preprocessing)
-    const preprocessedImage = preprocessImageForRecognition(
-        cropInfo.map(crop => crop.canvas)
-    );
-
-    // Create ONNX Runtime tensor
-    const inputTensor = new ort.Tensor('float32', preprocessedImage.data, preprocessedImage.dims);
-
-    // Run inference
-    const feeds = { 'input': inputTensor };
-    const results = await recognitionModel.run(feeds);
-
-    // Get logits
-    const logits = results.logits.data;
-    const [batchSize, height, numClasses] = results.logits.dims;
-
-    function decodeText(logits, vocab) {
-        const decodedResults = [];
+    // Advanced decoding function
+    function advancedTextDecoding(logits, vocab) {
+        const [batchSize, sequenceLength, vocabSize] = logits.dims;
+        const results = [];
 
         for (let b = 0; b < batchSize; b++) {
-            let bestText = '';
-            let overallConfidence = 1.0;
+            const decodedChars = [];
+            let confidenceScore = 1.0;
+            let lastCharIndex = -1;
 
-            // Track the most probable tokens for each position
-            for (let h = 0; h < height; h++) {
+            // Process each position in the sequence
+            for (let t = 0; t < sequenceLength; t++) {
                 const positionLogits = [];
-                for (let c = 0; c < numClasses; c++) {
-                    const index = b * (height * numClasses) + h * numClasses + c;
+                
+                // Collect logits for this position
+                for (let c = 0; c < vocabSize; c++) {
+                    const logitIndex = b * (sequenceLength * vocabSize) + t * vocabSize + c;
                     positionLogits.push({
                         index: c,
-                        logit: logits[index]
+                        logit: logits.data[logitIndex],
+                        char: vocab[c] || ''
                     });
                 }
 
-                // Sort logits by probability
-                const sortedOptions = positionLogits
+                // Sort and filter logits
+                const topCandidates = positionLogits
+                    .filter(opt => opt.char !== '')
                     .sort((a, b) => b.logit - a.logit)
-                    .filter(option => option.index !== numClasses - 1); // Skip blank/padding token
+                    .slice(0, 3);  // Consider top 3 candidates
 
-                // Select top candidate
-                if (sortedOptions.length > 0) {
-                    const topOption = sortedOptions[0];
-                    const character = vocab[topOption.index];
+                if (topCandidates.length > 0) {
+                    const bestCandidate = topCandidates[0];
                     
-                    // Prevent adding repeated characters
-                    if (character && (!bestText.length || character !== bestText[bestText.length - 1])) {
-                        bestText += character;
-                        // Update confidence (using softmax-like probability)
-                        overallConfidence *= Math.exp(topOption.logit) / 
-                            positionLogits.reduce((sum, opt) => sum + Math.exp(opt.logit), 0);
+                    // Prevent excessive repetition
+                    if (bestCandidate.index !== lastCharIndex || 
+                        (decodedChars.length === 0 || bestCandidate.char !== decodedChars[decodedChars.length - 1])) {
+                        decodedChars.push(bestCandidate.char);
+                        
+                        // Logarithmic confidence calculation
+                        confidenceScore *= Math.log1p(Math.exp(bestCandidate.logit)) / 
+                                           Math.log1p(Math.exp(positionLogits.reduce((max, p) => Math.max(max, p.logit), -Infinity)));
                     }
                 }
             }
 
-            // Additional filtering and cleaning
-            const cleanedText = bestText.trim()
-                .replace(/[^a-zA-Z0-9\s]/g, '')  // Remove special characters
-                .replace(/\s+/g, ' ');  // Normalize whitespace
+            // Text reconstruction and cleaning
+            const reconstructedText = decodedChars.join('').trim();
 
-            decodedResults.push({
-                text: cleanedText,
-                confidence: Math.max(0, Math.min(1, overallConfidence)),
-                boundingBox: cropInfo[b].boundingBox
+            results.push({
+                text: reconstructedText,
+                confidence: Math.min(Math.max(confidenceScore, 0), 1),
+                rawChars: decodedChars,
+                boundingBox: cropInfo[b].boundingBox  
             });
         }
 
-        return decodedResults;
+        return results;
     }
 
-    // Perform decoding
-    const recognitionResults = decodeText(logits, vocab);
+    // Post-processing function
+    function postProcessRecognition(results) {
+        return results
+            .map(result => {
+                // Clean up text
+                let cleanedText = result.text
+                    .replace(/\s+/g, ' ')  // Normalize whitespace
+                    .trim();
 
-    // Final filtering to remove very short or invalid results
-    return recognitionResults.filter(result => 
-        result.text.length > 1 && 
-        result.confidence > 0.3
-    );
+                // Additional filtering
+                const isValid = cleanedText.length > 1 && 
+                                result.confidence > 0.3 && 
+                                /[a-zA-Z0-9]/.test(cleanedText);
+
+                return {
+                    text: cleanedText,
+                    confidence: result.confidence,
+                    boundingBox: result.boundingBox,
+                    isValid: isValid
+                };
+            })
+            .filter(r => r.isValid)
+            .map(({ isValid, ...result }) => result); 
+    }
+
+    try {
+        const preprocessedImage = preprocessImageForRecognition(
+            crops.map(crop => crop.canvas)
+        );
+
+        // Create ONNX Runtime tensor
+        const inputTensor = new ort.Tensor('float32', preprocessedImage.data, preprocessedImage.dims);
+
+        // Run inference
+        const feeds = { 'input': inputTensor };
+        const results = await recognitionModel.run(feeds);
+
+        // Decode results
+        const decodedResults = advancedTextDecoding(results.logits, vocab);
+
+        // Post-process and filter results
+        const finalResults = postProcessRecognition(decodedResults);
+
+        return finalResults;
+
+    } catch (error) {
+        console.error('Text recognition error:', error);
+        return [];
+    }
 }
 
 
@@ -436,7 +468,7 @@ async function detectAndRecognizeText(imageElement) {
 
         try {
         const results = await recognizeText(crops, recognitionModel, VOCAB);
-        console.log('Decoded Texts:', results.text);        
+        console.log('Decoded Texts:', results);        
         
         results.forEach(result => {
                 extractedData.push({
