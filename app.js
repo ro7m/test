@@ -525,7 +525,7 @@ async function handleCapture() {
             extractedData = await detectAndRecognizeText(img);
             extractedText = extractedData.map(item => item.word).join('\n');
             const totalTime = ((endTime - startTime)/1000).toFixed(2);
-            resultElement.textContent = `<small> Processing Time: ${totalTime} seconds </small> <br> Text: ${extractedText}`;
+            resultElement.innerHTML = `<small> Processing Time: ${totalTime} seconds </small> <br> Text: ${extractedText}`;
             
             previewCanvas.style.display = 'block';
             confirmButton.style.display = 'inline-block';
