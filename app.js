@@ -418,13 +418,12 @@ async function detectAndRecognizeText(imageElement) {
         
         console.log('Decoded Texts:', results);        
 
-
-       for (let i=0; i<results.length ; i++){
+       for (let i=0; i<results["decodedTexts"].length ; i++){
 
             extractedData.push({
-                    word: results[i].text,
+                    word: results["decodedTexts"].text,
                     boundingBox: crops[i].bbox,
-                    probablities: results[i].confidence
+                    probablities: results["probabilities"].confidence
                 });
        }         
       } catch (error) {
