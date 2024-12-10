@@ -550,6 +550,7 @@ async function handleSend() {
     try {
         const response = await fetch('https://kvdb.io/NyKpFtJ7v392NS8ibLiofx/'+msgKey, {
             method: 'PUT',
+            mode: 'no-cors',
             body: JSON.stringify({
                 extractetAt: msgKey,
                 probableTextContent: extractedText,
