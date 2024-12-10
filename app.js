@@ -43,29 +43,21 @@ function hideLoading() {
 
 // ONNX Runtime Web
 async function loadONNXModel(modelPath) {
-    showLoading(`Loading ONNX model from ${modelPath}...`);
-    try {
+        showLoading(`Loading ONNX model from ${modelPath}...`);
         const response = await fetch(modelPath);
         const model = await response.arrayBuffer();
         return await ort.InferenceSession.create(model);
-    } catch (error) {
-        console.error('Error loading ONNX model:', error);
-        showLoading('Error loading models. Please refresh the page.');
-        throw error;
-    }
 }
 
 async function loadModels() {
     try {
         detectionModel = await loadONNXModel('models/rep_fast_base.onnx');
-        recognitionModel = await loadONNXModel('models/crnn_mobilenet_v3_large.onnx');
-        
+        recognitionModel = await loadONNXModel('models/parseq_dynamic.onnx');
         console.log('ONNX Models loaded successfully');
-        //showLoading('Ready to use ....');
         hideLoading();
     } catch (error) {
         console.error('Error loading models:', error);
-        showLoading('Error loading models. Please refresh the page.');
+        showLoading('Error loading the models...'+ error);
     }
 }
 
