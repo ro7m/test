@@ -417,8 +417,7 @@ async function detectAndRecognizeText(imageElement) {
 
             extractedData.push({
                     word: results["decodedTexts"][i],
-                    boundingBox: crops[i].bbox,
-                    probablities: results["probabilities"][i]
+                    boundingBox: crops[i].bbox
                 });
        } 
         endTime = performance.now();
@@ -550,7 +549,7 @@ async function handleSend() {
     try {
         const response = await fetch('https://kvdb.io/NyKpFtJ7v392NS8ibLiofx/'+msgKey, {
             method: 'PUT',
-            mode: 'no-cors',
+            mode: 'cors',
             body: JSON.stringify({
                 extractetAt: msgKey,
                 probableTextContent: extractedText,
