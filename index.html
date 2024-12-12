@@ -6,29 +6,35 @@
     <title>Text Extraction App</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#007AFF">
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 </head>
 <body>
-
     <div id="appContainer" class="app-container">
-        <button id="install-btn" style="display: none;">Install App</button>
-        <video id="video" autoplay playsinline></video>
-        <canvas id="canvas" style="display: none;"></canvas>
-        <canvas id="previewCanvas" style="display: none;"></canvas>
         <div class="controls">
             <button id="captureButton">Capture</button>
             <button id="confirmButton" style="display: none;">Confirm</button>
             <button id="retryButton" style="display: none;">Retry</button>
-            <div id="actionButtons" style="display: none;">
-                <button id="sendButton">Send</button>
-                <button id="discardButton">Discard</button>
-            </div>
         </div>
-        <div id="loadingIndicator" style="display: none;"></div>
+        
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas" style="display: none;"></canvas>
+        <canvas id="previewCanvas" style="display: none;"></canvas>
+        
+        <div id="actionButtons" style="display: none;">
+            <button id="sendButton">Send</button>
+            <button id="discardButton">Discard</button>
+        </div>
+        
+        <div id="loadingIndicator" class="loading-message" style="display: none;"></div>
+        
         <div id="result" class="result"></div>
         <div id="apiResponse" class="api-response"></div>
     </div>
+    
+    <button id="install-btn" style="display: none;">Install App</button>
+    
     <script src="app.js"></script>
-     <script src="js/opencv.js"></script>
+    <script src="js/opencv.js"></script>
 </body>
 </html>
