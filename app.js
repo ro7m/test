@@ -495,6 +495,7 @@ function enableCaptureButton() {
 async function handleCapture() {
     disableCaptureButton();
     showLoading('Processing image...');
+    document.getElementById("processingOverlay").classList.remove("hidden");
 
     await ensureModelsLoaded();  // Ensure models are loaded before processing
 
@@ -526,6 +527,7 @@ async function handleCapture() {
             endTime = null;
             enableCaptureButton();
             hideLoading();
+            document.getElementById("processingOverlay").classList.add("hidden");
         }
     };
 }

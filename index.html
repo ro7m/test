@@ -1,33 +1,279 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
     <title>Text Extraction App</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="manifest" href="manifest.json">
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <meta name="orientation" content="portrait" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
+    <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="manifest" href="manifest.json" />
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-</head>
-<body>
-    <div id="appContainer" class="app-container">
-        <button id="install-btn" style="display: none;">Install App</button>
-        <video id="video" autoplay playsinline></video>
-        <canvas id="canvas" style="display: none;"></canvas>
-        <canvas id="previewCanvas" style="display: none;"></canvas>
-        <div class="controls">
-            <button id="captureButton">Capture</button>
-            <button id="confirmButton" style="display: none;">Confirm</button>
-            <button id="retryButton" style="display: none;">Retry</button>
+    <style>
+      .video-container {
+        position: relative;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #000;
+        margin-bottom: var(--spacing-md);
+      }
+
+      .hero {
+        text-align: center;
+        margin-bottom: var(--spacing-lg);
+      }
+
+      .hero h1 {
+        font-size: 2.5rem;
+        margin-bottom: var(--spacing-md);
+        color: var(--primary);
+      }
+
+      .hero p {
+        font-size: 1.2rem;
+        color: var(--text-light);
+        opacity: 0.9;
+      }
+      .scanner-container {
+        background: var(--secondary);
+        border: 2px solid var(--primary);
+        border-radius: 12px;
+        padding: var(--spacing-lg);
+        margin-bottom: var(--spacing-lg);
+        position: relative;
+      }
+      @media (max-width: 768px) {
+        .container {
+          padding: var(--spacing-md);
+        }
+
+        .hero h1 {
+          font-size: 2rem;
+        }
+
+        .button-group {
+          flex-direction: column;
+        }
+
+        .button {
+          width: 100%;
+          justify-content: center;
+        }
+
+        .scanner-container {
+          padding: var(--spacing-md);
+        }
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(8px);
+        z-index: 1000;
+      }
+
+      .modal-content {
+        background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+        margin: 15% auto;
+        padding: 2rem;
+        width: 90%;
+        max-width: 500px;
+        border-radius: 20px;
+        border: 2px solid var(--primary);
+        box-shadow: 0 10px 30px rgba(255, 215, 0, 0.1);
+        animation: modalSlideIn 0.3s ease-out;
+      }
+
+      .modal-content h2 {
+        color: var(--primary);
+        font-size: 1.8rem;
+        margin-bottom: 1rem;
+        font-weight: 600;
+      }
+
+      .modal-content p {
+        color: var(--text-light);
+        line-height: 1.6;
+        margin-bottom: 1.5rem;
+      }
+
+      @media (max-width: 768px) {
+        .modal-content {
+          margin: 10% auto;
+          width: 95%;
+          padding: 20px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .modal-content {
+          margin: 5% auto;
+          padding: 15px;
+        }
+      }
+
+      .buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="header">
+      <nav class="nav-container">
+        <div style="width: 100px; display: flex; justify-content: left;">
+          <img
+            src="image\png\BrandLogo.org - Western Union Logo.svg"
+            alt="ImageScan Logo"
+          />
         </div>
-        <div id="actionButtons" style="display: none;">
-            <button id="sendButton">Send</button>
-            <button id="discardButton">Discard</button>
+        <a href="#" class="brand" style="justify-content: center">ImageScan</a>
+        <!-- <div class="lang-selector">EN</div> -->
+      </nav>
+    </header>
+    <button id="install-btn" style="display: none">Install App</button>
+    <div id="disclaimerModal" class="modal">
+      <div class="modal-content">
+        <div style="display: grid; justify-content: center">
+          <h2>Disclaimer</h2>
         </div>
-        <div id="loadingIndicator" style="display: none;"></div>
-        <div id="result" class="result"></div>
-        <div id="apiResponse" class="api-response"></div>
+        <p>
+          Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do
+          eiusmod tempor incididunt ut labore et dolore magna aliqua.
+        </p>
+        <div class="buttons">
+          <button class="button" onclick="acceptAndCapture()">Accept</button>
+        </div>
+      </div>
     </div>
+
+    <main class="container">
+      <section class="hero">
+        <h1>Extract Text from Images in Real-time</h1>
+        <p>
+          Advanced text recognition with instant results. Perfect for documents,
+          signs, and more.
+        </p>
+      </section>
+      <div class="scanner-container">
+        <div class="app-container">
+          <div class="video-container">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas" style="display: none"></canvas>
+            <hr style="margin: 2%" />
+            <canvas id="previewCanvas" style="display: none"></canvas>
+          </div>
+
+          <div id="processingOverlay" class="processing-overlay hidden">
+            <div class="loading-spinner"></div>
+            <p>Processing image...</p>
+          </div>
+
+          <div class="controls">
+            <div class="button-group">
+              <button id="captureButton" class="button">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="24"
+                  height="24"
+                  fill="currentColor"
+                >
+                  <circle cx="12" cy="12" r="3.2"></circle>
+                  <path
+                    d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9z"
+                  />
+                </svg>
+                Capture
+              </button>
+              <button id="confirmButton" class="button" style="display: none">
+                Confirm
+              </button>
+              <button id="retryButton" class="button" style="display: none">
+                Retry
+              </button>
+            </div>
+
+            <div class="result-container">
+              <div
+                id="actionButtons"
+                style="
+                  display: none;
+                  justify-content: center;
+                  gap: 10px;
+                  margin-bottom: 4%;
+                "
+              >
+                <button id="sendButton" class="button">Send</button>
+                <button id="discardButton" class="button">Discard</button>
+              </div>
+              <div id="loadingIndicator" style="display: none"></div>
+              <div id="result" class="result"></div>
+              <div id="apiResponse" class="api-response"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- <div id="appContainer" class="app-container">
+      <button id="install-btn" style="display: none">Install App</button>
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas" style="display: none"></canvas>
+      <canvas id="previewCanvas" style="display: none"></canvas>
+      <div class="controls">
+        <button id="captureButton">Capture</button>
+        <button id="confirmButton" style="display: none">Confirm</button>
+        <button id="retryButton" style="display: none">Retry</button>
+      </div>
+      <div id="actionButtons" style="display: none">
+        <button id="sendButton">Send</button>
+        <button id="discardButton">Discard</button>
+      </div>
+      <div id="loadingIndicator" style="display: none"></div>
+      <div id="result" class="result"></div>
+      <div id="apiResponse" class="api-response"></div>
+    </div> -->
+
     <script src="app.js"></script>
     <script src="js/opencv.js"></script>
-</body>
+    <script>
+      const modal = document.getElementById("disclaimerModal");
+
+      window.onload = function () {
+        modal.style.display = "block";
+      };
+
+      function closeModal() {
+        modal.style.display = "none";
+      }
+
+      function acceptAndCapture() {
+        console.log("Capture function called");
+        closeModal();
+      }
+    </script>
+  </body>
 </html>
