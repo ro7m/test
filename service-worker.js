@@ -1,11 +1,10 @@
-
 const CACHE_NAME = 'text-extract-v1';
 const urlsToCache = [
-  '/',
-  '/models/',
-  '/index.html',
-  '/styles.css',
-  '/app.js',
+  '/Onnx-models/',  // Add base path
+  '/Onnx-models/models/',
+  '/Onnx-models/index.html',
+  '/Onnx-models/styles.css',
+  '/Onnx-models/app.js',
   'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js'
 ];
 
