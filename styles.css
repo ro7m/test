@@ -1,4 +1,21 @@
-:root {
+:root[data-theme="light"] {
+    --primary: #ffd700;
+    --primary-dark: #ffc700;
+    --secondary: #ffffff;
+    --text-light: #333333;
+    --text-dark: #ffffff;
+    --accent: #ffe44d;
+    --error: #ff4444;
+    --success: #44ff44;
+    --bg-color: #ffffff;
+    --card-bg: #f5f5f5;
+    --border-color: #e0e0e0;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 2rem;
+  }
+  
+  :root[data-theme="dark"] {
     --primary: #ffd700;
     --primary-dark: #ffc700;
     --secondary: #222222;
@@ -7,6 +24,9 @@
     --accent: #ffe44d;
     --error: #ff4444;
     --success: #44ff44;
+    --bg-color: #121212;
+    --card-bg: #1e1e1e;
+    --border-color: #333333;
     --spacing-sm: 0.5rem;
     --spacing-md: 1rem;
     --spacing-lg: 2rem;
@@ -21,15 +41,19 @@
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
       Ubuntu, Cantarell, sans-serif;
-    background: var(--secondary);
-    color: var(--text-light);
+  
     line-height: 1.6;
+  
+    background: var(--bg-color);
+    color: var(--text-light);
+    transition: background-color 0.3s, color 0.3s;
   }
   
   .header {
     background: var(--primary);
     padding: var(--spacing-md);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    color: var(--text-dark);
   }
   
   .nav-container {
@@ -71,7 +95,7 @@
   }
   
   .scanner-container {
-    background: var(--secondary);
+    background: var(--card-bg);
     border: 2px solid var(--primary);
     border-radius: 12px;
     padding: var(--spacing-lg);
@@ -134,7 +158,8 @@
   }
   
   .result-container {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--card-bg);
+    border: 1px solid #ffc700;
     border-radius: 8px;
     padding: var(--spacing-md);
     margin-top: var(--spacing-lg);
@@ -202,6 +227,261 @@
   
     .scanner-container {
       padding: var(--spacing-md);
+    }
+  }
+  
+  /* :root {
+      --bs-primary: #ffd700;
+      --bs-secondary: #222222;
+    }
+    
+    body {
+      background: var(--bs-secondary);
+    } */
+  
+  /* Override Bootstrap styles */
+  .btn-warning {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+  }
+  
+  .btn-warning:hover {
+    background-color: #ffc700;
+    border-color: #ffc700;
+  }
+  
+  .text-warning {
+    color: var(--bs-primary) !important;
+  }
+  
+  .border-warning {
+    border-color: var(--bs-primary) !important;
+  }
+  
+  .bg-warning {
+    background-color: var(--bs-primary) !important;
+  }
+  
+  /* Video styles */
+  #video,
+  #canvas,
+  #previewCanvas {
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+    background: #000;
+  }
+  
+  /* Processing overlay spinner */
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  
+  .modal-backdrop.show {
+    opacity: 0;
+  }
+  
+  .theme-toggle {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+  }
+  
+  .theme-toggle:hover {
+    background: rgba(0, 0, 0, 0.1);
+  }
+  
+  .theme-toggle svg {
+    width: 24px;
+    height: 24px;
+    fill: var(--secondary);
+  }
+  
+  [data-theme="dark"] .sun-icon {
+    display: block;
+  }
+  
+  [data-theme="dark"] .moon-icon {
+    display: none;
+  }
+  
+  [data-theme="light"] .sun-icon {
+    display: none;
+  }
+  
+  [data-theme="light"] .moon-icon {
+    display: block;
+  }
+  
+  /* You can replace the current loader with any of these alternatives by changing the CSS */
+  
+  /* Alternative 1: Pulsing Dots */
+  .loader {
+    width: 120px;
+    height: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .loader::after,
+  .loader::before {
+    content: "";
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    background-color: var(--primary);
+    border-radius: 50%;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  
+  .loader::after {
+    animation-delay: 0.7s;
+  }
+  
+  @keyframes pulse {
+    0%,
+    100% {
+      transform: scale(0.5);
+      opacity: 0.5;
+    }
+    50% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  
+  /* Alternative 2: Growing Bar */
+  .loader {
+    width: 120px;
+    height: 6px;
+    background: rgba(255, 215, 0, 0.2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  
+  .loader::after {
+    content: "";
+    width: 40%;
+    height: 100%;
+    background: var(--primary);
+    position: absolute;
+    border-radius: 3px;
+    left: 0;
+    animation: loading 1s ease-in-out infinite;
+  }
+  
+  @keyframes loading {
+    0% {
+      left: -40%;
+    }
+    100% {
+      left: 100%;
+    }
+  }
+  
+  /* Alternative 3: Dual Ring */
+  .loader {
+    width: 48px;
+    height: 48px;
+    border: 5px solid var(--primary);
+    border-radius: 50%;
+    position: relative;
+  }
+  
+  .loader::after {
+    content: "";
+    position: absolute;
+    top: -5px;
+    left: -5px;
+    right: -5px;
+    bottom: -5px;
+    border: 5px solid transparent;
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  
+  /* Custom toast styles */
+  .toast {
+    background: none;
+    border: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 300px;
+    max-width: 400px;
+  }
+  
+  .toast .bg-success {
+    background-color: #28a745 !important;
+    border-radius: 6px;
+  }
+  
+  .toast .bg-danger {
+    background-color: #dc3545 !important;
+    border-radius: 6px;
+  }
+  
+  .toast-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .toast-body {
+    font-weight: 500;
+    font-size: 0.95rem;
+  }
+  
+  /* Toast animation */
+  .toast.show {
+    animation: slideIn 0.3s ease-in-out;
+  }
+  
+  .toast.hide {
+    animation: slideOut 0.3s ease-in-out;
+  }
+  
+  @keyframes slideIn {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  
+  @keyframes slideOut {
+    from {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(100%);
+      opacity: 0;
     }
   }
   
