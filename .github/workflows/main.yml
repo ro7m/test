@@ -38,6 +38,9 @@ jobs:
           cp *.js dist/ || true
           cp *.css dist/ || true
           cp *.json dist/ || true
+          mkdir -p dist/js
+          cp js/opencv.js dist/js/opencv.js 
+          cp js/opencv_js.wasm dist/js/opencv_js.wasm
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
