@@ -1,21 +1,49 @@
-name: Deploy Static Application
+name: Deploy Static Site
 
 on:
   push:
-    branches:
-      - master
+    branches: [ master ]
   workflow_dispatch:
 
+# Important: Updated permissions
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  deployments: write
+
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          ref: master
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Create deployment directory
+        run: |
+          mkdir -p dist
+          cp -r models dist/ || true
+          cp -r lib dist/ || true
+          cp -r image dist/ || true
+          cp *.html dist/ || true
+          cp *.js dist/ || true
+          cp *.css dist/ || true
+          cp *.json dist/ || true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
 
       - name: Deploy to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@4.1.5
-        with:
-          branch: gh-pages
-          folder: .
-          clean: true # Automatically remove deleted files from the deploy branch
+        id: deployment
+        uses: actions/deploy-pages@v4
