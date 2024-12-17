@@ -535,6 +535,8 @@ async function handleCapture() {
   disableCaptureButton();
   showLoading("Processing image...");
   document.getElementById("processingOverlay").classList.remove("hidden");
+  //   video.style.display = "none";
+  video.pause();
 
   await ensureModelsLoaded(); // Ensure models are loaded before processing
 
@@ -559,6 +561,7 @@ async function handleCapture() {
       retryButton.style.display = "inline-block";
       actionButtons.style.display = "block";
       captureButton.style.display = "none";
+      video.style.display = "none";
     } catch (error) {
       console.error("Error during text extraction:", error);
       resultElement.textContent = "Error occurred during text extraction";
@@ -575,10 +578,12 @@ async function handleCapture() {
 
 function handleConfirm() {
   toggleButtons(true);
-  previewCanvas.style.display = "none";
+  previewCanvas.style.display = "block";
+  video.style.display = "none";
+  video.play();
   confirmButton.style.display = "none";
   retryButton.style.display = "none";
-  actionButtons.style.display = "none";
+  actionButtons.style.display = "block";
   document.getElementById("sendDiscardButton").style.display = "block";
 }
 
@@ -643,6 +648,8 @@ function resetUI() {
   retryButton.style.display = "none";
   actionButtons.style.display = "none";
   captureButton.style.display = "block";
+  video.style.display = "block";
+  video.play();
   document.getElementById("sendDiscardButton").style.display = "none";
 }
 

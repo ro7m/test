@@ -401,10 +401,8 @@
     </div>
     <main class="container">
       <section class="hero">
-        <h1>Extract Text from Images in Real-time</h1>
+        <h1</h1>
         <p>
-          Advanced text recognition with instant results. Perfect for documents,
-          signs, and more.
         </p>
       </section>
       <div class="scanner-container">
@@ -412,8 +410,45 @@
           <div class="video-container">
             <video id="video" autoplay playsinline></video>
             <canvas id="canvas" style="display: none"></canvas>
-            <hr style="margin: 2%" />
+            <!-- <hr style="margin: 2%" /> -->
+          <!-- <div>
             <canvas id="previewCanvas" style="display: none"></canvas>
+            <div
+              class="result-container"
+              id="resultContainer"
+              style="display: none"
+            >
+              <div
+                id="actionButtons"
+                style="
+                  display: flex;
+                  justify-content: center;
+                  gap: 10px;
+                  margin-bottom: 4%;
+                "
+              ></div>
+              <div id="loadingIndicator" style="display: none"></div>
+              <div id="result" class="result"></div>
+              <div id="apiResponse" class="api-response"></div>
+            </div>
+          </div> -->
+          <!-- Replace the existing previewCanvas and resultContainer section with this -->
+        <div style="display: flex;gap: 5px;margin-top: 2px;margin-bottom: 2px;flex-wrap: nowrap;width: 100%;">
+            <!-- Left side: Preview Canvas -->
+            <div style="flex: 1; min-width: 45%;">
+            <canvas id="previewCanvas" style="display: none; width: 100%; height: auto; min-height: 200px; border-radius: 8px;"></canvas>
+            </div>
+            
+            <!-- Right side: Result Container -->
+            <div style="flex: 1; min-width: 45%;">
+            <div class="result-container" id="resultContainer" style="display: none; height: 100%; margin-top: 0;">
+                <div id="actionButtons" style="display: flex; justify-content: center; gap: 10px; margin-bottom: 4%;"></div>
+                <div id="loadingIndicator" style="display: none;"></div>
+                <div id="result" class="result"></div>
+                <div id="apiResponse" class="api-response"></div>
+            </div>
+            </div>
+        </div>
           </div>
 
           <div id="processingOverlay" class="processing-overlay hidden">
@@ -445,24 +480,7 @@
               </button>
             </div>
 
-            <div
-              class="result-container"
-              id="resultContainer"
-              style="display: none"
-            >
-              <div
-                id="actionButtons"
-                style="
-                  display: flex;
-                  justify-content: center;
-                  gap: 10px;
-                  margin-bottom: 4%;
-                "
-              ></div>
-              <div id="loadingIndicator" style="display: none"></div>
-              <div id="result" class="result"></div>
-              <div id="apiResponse" class="api-response"></div>
-            </div>
+            
             <div
               style="display: none"
               id="sendDiscardButton"
@@ -480,6 +498,8 @@
               </button>
             </div>
           </div>
+
+
         </div>
       </div>
     </main>
