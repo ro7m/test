@@ -556,7 +556,7 @@ async function handleCapture() {
       const totalTime = ((endTime - startTime) / 1000).toFixed(2);
       resultElement.innerHTML = `<small> Processing Time: ${totalTime} seconds  <br> <u>ExtractedText:</u><br> ${extractedText} </small>`;
 
-      previewCanvas.style.display = "block";
+      previewCanvas.style.display = "none";
       confirmButton.style.display = "inline-block";
       retryButton.style.display = "inline-block";
       actionButtons.style.display = "block";
@@ -578,7 +578,7 @@ async function handleCapture() {
 
 function handleConfirm() {
   toggleButtons(true);
-  previewCanvas.style.display = "block";
+  previewCanvas.style.display = "none";
   video.style.display = "none";
   video.play();
   confirmButton.style.display = "none";
