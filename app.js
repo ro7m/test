@@ -6,7 +6,7 @@ const DET_STD = [0.264, 0.2749, 0.287];
 const VOCAB =
   "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~°£€¥¢฿àâéèêëîïôùûüçÀÂÉÈÊËÎÏÔÙÛÜÇ";
 
-const TARGET_SIZE = [2024, 1024];
+const TARGET_SIZE = [1024, 1024];
 
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
