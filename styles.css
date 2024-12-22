@@ -160,12 +160,38 @@ body {
   margin-top: var(--spacing-md);
 }
 
+
 .result-container {
   background: var(--card-bg);
   border: 1px solid #ffc700;
   border-radius: 8px;
   padding: var(--spacing-md);
+  max-height: 50vh; /* Fixed height */
+  overflow-y: auto; /* Enable vertical scrolling */
   margin-top: var(--spacing-lg);
+
+  /* Optional: For better scrolling on mobile */
+  -webkit-overflow-scrolling: touch;
+}
+
+.result-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.result-container::-webkit-scrollbar-track {
+  background: var(--card-bg);
+  border-radius: 4px;
+}
+
+.result-container::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 4px;
+}
+
+/* For Firefox */
+.result-container {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) var(--card-bg);
 }
 
 .result-text {
@@ -173,6 +199,7 @@ body {
   font-size: 1.1rem;
   margin-bottom: var(--spacing-md);
   word-wrap: break-word;
+  white-space: pre-wrap; /* Preserve line breaks */
 }
 
 .processing-overlay {
