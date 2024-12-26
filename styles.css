@@ -118,7 +118,7 @@ body {
 #canvas,
 #previewCanvas {
   width: 100%;
-  aspect-ratio: 16/9;
+  aspect-ratio: 5/9;
   object-fit: cover;
   border-radius: 8px;
   background: #000;
@@ -309,7 +309,7 @@ body {
 #canvas,
 #previewCanvas {
   width: 100%;
-  aspect-ratio: 8/9;
+  aspect-ratio: 5/9;
   object-fit: cover;
   background: #000;
 }
